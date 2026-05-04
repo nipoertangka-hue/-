@@ -300,6 +300,7 @@
 <script>
 /* ===== Supabase Auth & Sync ===== */
 window.sb = null;
+let userRole = 'viewer'; // 預設權限為查看者
 try {
   if (typeof supabase !== 'undefined') {
     window.sb = supabase.createClient(SB_URL, SB_KEY);
@@ -368,6 +369,18 @@ async function checkSession() {
     
     if (data?.session) {
       curUser = data.session.user;
+      
+      // 獲取使用者權限等級
+      const { data: profile } = await sb.from('profiles').select('role').eq('id', curUser.id).single();
+      if (profile) {
+        userRole = profile.role;
+      } else {
+        // 如果沒有 profile，自動建立一個預設為 viewer 的
+        await sb.from('profiles').insert({ id: curUser.id, role: 'viewer' });
+        userRole = 'viewer';
+      }
+      
+      console.log('User Role:', userRole);
       document.getElementById('authScreen').style.display = 'none';
       await initData();
     } else {
@@ -651,6 +664,8 @@ const VT = {
   settings: '系統設置'
 };
 function hBtns(v) {
+  if (userRole === 'viewer') return ''; // 查看者隱藏所有操作按鈕
+  
   switch (v) {
     case 'dashboard':
       return `<button class="bt bt-g bt-sm" onclick="oAI()"><span class="material-icons-outlined text-xs">add</span><span class="hidden sm:inline">進貨</span></button><button class="bt bt-o bt-sm" onclick="expD()"><span class="material-icons-outlined text-xs">download</span></button>`;
@@ -671,6 +686,9 @@ function hBtns(v) {
   }
 }
 function swV(v) {
+  if (v === 'settings' && userRole !== 'admin') {
+    return toast('權限不足，僅管理員可進入設置', 'e');
+  }
   cV = v;
   document.getElementById('VT').textContent = VT[v];
   document.getElementById('HA').innerHTML = hBtns(v);
