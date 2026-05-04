@@ -412,11 +412,16 @@ async function checkSession() {
 async function initData() {
   lD(); // 先加載本地緩存
   await syncFromCloud(); // 同步雲端資料
-  initD();
+  // 移除 initD()，改為直接檢查是否需要載入預設資料
+  if (!items.length && !makers.length && !customers.length && !agents.length && !monks.length) {
+    initD();
+  }
+  document.getElementById('SBT').textContent = S.shopName;
   swV('dashboard');
 }
 
 async function syncFromCloud() {
+  if (!curUser || !sb) return;
   try {
     const [it, mk, cu, ag, nk] = await Promise.all([
       sb.from('items').select('*'),
@@ -425,11 +430,14 @@ async function syncFromCloud() {
       sb.from('agents').select('*'),
       sb.from('monks').select('*')
     ]);
-    if (it.data) items = it.data;
-    if (mk.data) makers = mk.data;
-    if (cu.data) customers = cu.data;
-    if (ag.data) agents = ag.data;
-    if (nk.data) monks = nk.data;
+    
+    // 只有當雲端有資料時才覆蓋本地
+    if (it.data && it.data.length > 0) items = it.data;
+    if (mk.data && mk.data.length > 0) makers = mk.data;
+    if (cu.data && cu.data.length > 0) customers = cu.data;
+    if (ag.data && ag.data.length > 0) agents = ag.data;
+    if (nk.data && nk.data.length > 0) monks = nk.data;
+    
     saveAllToLocal();
   } catch (e) { console.error('Sync error:', e); }
 }
@@ -584,8 +592,10 @@ function daysSince(d) {
 
 function initD(){
     lD();
-    if(!items.length){
-        items=[
+    // 如果已經有資料了，就不載入範例預設資料
+    if(items.length || makers.length || customers.length || agents.length || monks.length) return;
+
+    items=[
             {id:gId(),code:'TK-2024-001',image:'',imageHash:null,region:'西藏',maker:'拉薩吉祥唐卡工作室',painter:'多吉次仁',cost:15000,price:28000,extraCost:0,taxIncluded:true,framed:false,purchaseDate:'2024-03-15',shipmentDate:null,shipNotes:'',status:'in-stock',notes:'手繪礦物顏料',custName:'',custPhone:'',agentName:'',deposit:0,balance:0,balanceDue:'',createdAt:'2024-03-15'},
             {id:gId(),code:'TK-2024-002',image:'',imageHash:null,region:'尼泊爾',maker:'Boudha Thangka Center',painter:'Raj Kumar',cost:8000,price:18000,extraCost:500,taxIncluded:false,framed:true,purchaseDate:'2024-04-02',shipmentDate:null,shipNotes:'',status:'in-stock',notes:'24K金描線',custName:'',custPhone:'',agentName:'',deposit:0,balance:0,balanceDue:'',createdAt:'2024-04-02'},
             {id:gId(),code:'TK-2024-003',image:'',imageHash:null,region:'不丹',maker:'不丹皇家畫院',painter:'丹增諾布',cost:22000,price:45000,extraCost:3000,taxIncluded:true,framed:true,purchaseDate:'2024-01-20',shipmentDate:'2024-05-10',shipNotes:'王先生',status:'shipped',notes:'綠度母',custName:'王大明',custPhone:'0912-345-678',agentName:'',deposit:20000,balance:25000,balanceDue:'2024-06-10',createdAt:'2024-01-20'},
