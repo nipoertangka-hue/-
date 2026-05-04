@@ -341,7 +341,15 @@ async function handleAuth() {
     if (isSignUp) {
       res = await sb.auth.signUp({ email, password });
       if (res.error) throw res.error;
-      toast('註冊成功！請檢查信箱驗證或直接登入', 's');
+      
+      if (res.data.session) {
+        toast('註冊並登入成功', 's');
+        checkSession();
+      } else {
+        toast('註冊成功！請檢查信箱驗證或直接登入', 's');
+        isSignUp = false;
+        toggleAuthMode(); // 自動切換回登入模式
+      }
     } else {
       res = await sb.auth.signInWithPassword({ email, password });
       if (res.error) throw res.error;
