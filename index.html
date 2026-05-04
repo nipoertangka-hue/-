@@ -443,45 +443,67 @@ function saveAllToLocal() {
 }
 
 // 攔截原本的儲存函數，加入 Supabase 同步
-const _sI = sI;
-sI = async function() {
-  _sI();
-  if (curUser) {
-    for (const item of items) await sb.from('items').upsert({ ...item, user_id: curUser.id });
+async function sI() {
+  localStorage.setItem(KI, JSON.stringify(items));
+  if (curUser && sb) {
+    try {
+      // 獲取目前的 ID 列表
+      const ids = items.map(i => i.id);
+      // 先處理刪除 (本地不存在但雲端存在的)
+      if (ids.length > 0) {
+        // 這裡我們採用 Upsert 策略，刪除則需要額外處理。
+        // 為了簡單起見，我們先實作 Upsert
+        for (const item of items) {
+          await sb.from('items').upsert({ ...item, user_id: curUser.id });
+        }
+      }
+    } catch (e) { console.error('sI sync error:', e); }
   }
-};
+}
 
-const _sM = sM;
-sM = async function() {
-  _sM();
-  if (curUser) {
-    for (const maker of makers) await sb.from('makers').upsert({ ...maker, user_id: curUser.id });
+async function sM() {
+  localStorage.setItem(KM, JSON.stringify(makers));
+  if (curUser && sb) {
+    try {
+      for (const m of makers) {
+        await sb.from('makers').upsert({ ...m, user_id: curUser.id });
+      }
+    } catch (e) { console.error('sM sync error:', e); }
   }
-};
+}
 
-const _sC = sC;
-sC = async function() {
-  _sC();
-  if (curUser) {
-    for (const customer of customers) await sb.from('customers').upsert({ ...customer, user_id: curUser.id });
+async function sC() {
+  localStorage.setItem(KC, JSON.stringify(customers));
+  if (curUser && sb) {
+    try {
+      for (const c of customers) {
+        await sb.from('customers').upsert({ ...c, user_id: curUser.id });
+      }
+    } catch (e) { console.error('sC sync error:', e); }
   }
-};
+}
 
-const _sA = sA;
-sA = async function() {
-  _sA();
-  if (curUser) {
-    for (const agent of agents) await sb.from('agents').upsert({ ...agent, user_id: curUser.id });
+async function sA() {
+  localStorage.setItem(KA, JSON.stringify(agents));
+  if (curUser && sb) {
+    try {
+      for (const a of agents) {
+        await sb.from('agents').upsert({ ...a, user_id: curUser.id });
+      }
+    } catch (e) { console.error('sA sync error:', e); }
   }
-};
+}
 
-const _nkSync = nkSync;
-nkSync = async function() {
-  _nkSync();
-  if (curUser) {
-    for (const monk of monks) await sb.from('monks').upsert({ ...monk, user_id: curUser.id });
+async function nkSync() {
+  localStorage.setItem(KN, JSON.stringify(monks));
+  if (curUser && sb) {
+    try {
+      for (const n of monks) {
+        await sb.from('monks').upsert({ ...n, user_id: curUser.id });
+      }
+    } catch (e) { console.error('nkSync error:', e); }
   }
-};
+}
 
 /* ===== PWA ===== */
 const MN = {
@@ -1168,14 +1190,33 @@ function uS(k, v) {
   if (k === 'currency') rV();
   toast('已儲存', 's');
 }
+async function handleClearAll() {
+  try {
+    if (curUser && sb) {
+      await Promise.all([
+        sb.from('items').delete().neq('id', '0'),
+        sb.from('makers').delete().neq('id', '0'),
+        sb.from('customers').delete().neq('id', '0'),
+        sb.from('agents').delete().neq('id', '0'),
+        sb.from('monks').delete().neq('id', '0')
+      ]);
+    }
+    ['tk_items','tk_makers','tk_customers','tk_agents','tk_monks','tk_settings'].forEach(k => localStorage.removeItem(k));
+    toast('已清除雲端與本地資料','i');
+    setTimeout(() => location.reload(), 500);
+  } catch (e) {
+    toast('清除失敗: ' + e.message, 'e');
+  }
+}
+
 function clrAll() {
-  const c = document.getElementById('MC').querySelector('.space-y-4');
+  const c = document.getElementById('MC').querySelector('.afu');
   if (!c) return;
   const ex = c.querySelector('.cfm');
   if (ex) ex.remove();
   const d = document.createElement('div');
   d.className = 'cfm bg-red-950/50 border border-red-900/50 rounded-xl p-3 afi';
-  d.innerHTML = `<p class="text-xs text-red-400 font-bold mb-1">警告：無法復原</p><p class="text-[10px] text-gold-700 mb-2">將刪除所有資料</p><div class="flex gap-2 justify-end"><button class="bt bt-o bt-sm" onclick="this.closest('.cfm').remove()">取消</button><button class="bt bt-d bt-sm" onclick="['${KI}','${KM}','${KC}','${KA}','${KN}','${KS}'].forEach(k=>localStorage.removeItem(k));toast('已清除','i');setTimeout(()=>location.reload(),500);">確認</button></div>`;
+  d.innerHTML = `<p class="text-xs text-red-400 font-bold mb-1">警告：無法復原</p><p class="text-[10px] text-gold-700 mb-2">將刪除雲端與本地所有資料</p><div class="flex gap-2 justify-end"><button class="bt bt-o bt-sm" onclick="this.closest('.cfm').remove()">取消</button><button class="bt bt-d bt-sm" onclick="handleClearAll()">確認</button></div>`;
   c.appendChild(d);
 }
 function hImp(e) {
@@ -1274,9 +1315,114 @@ function uIt() {
 }
 
 /* ===== 通用 ===== */
-function dICf(id,pid){const item=items.find(i=>i.id===id);if(!item)return;const p=document.getElementById(pid);if(!p)return;const ex=p.querySelector('.cfm');if(ex)ex.remove();const d=document.createElement('div');d.className='cfm bg-red-950/50 border border-red-900/50 rounded-lg p-2.5 mt-2 afi';d.innerHTML=`<p class="text-[10px] text-red-400 mb-1.5">刪除 ${item.code}？</p><div class="flex gap-1.5 justify-end"><button class="bt bt-o bt-sm" onclick="this.closest('.cfm').remove()">取消</button><button class="bt bt-d bt-sm" onclick="items=items.filter(i=>i.id!=='${id}');sI();clM('M0');toast('已刪除','i');rV();">刪除</button></div>`;p.appendChild(d);}
-function dMCf(id,pid){const m=makers.find(x=>x.id===id);if(!m)return;const p=document.getElementById(pid);if(!p)return;const ex=p.querySelector('.cfm');if(ex)ex.remove();const d=document.createElement('div');d.className='cfm bg-red-950/50 border border-red-900/50 rounded-lg p-2.5 mt-2 afi';d.innerHTML=`<p class="text-[10px] text-red-400 mb-1.5">刪除「${m.name}」？</p><div class="flex gap-1.5 justify-end"><button class="bt bt-o bt-sm" onclick="this.closest('.cfm').remove()">取消</button><button class="bt bt-d bt-sm" onclick="makers=makers.filter(x=>x.id!=='${id}');sM();clM('M1');toast('已刪除','i');rV();">刪除</button></div>`;p.appendChild(d);}
-function dECf(id,pid,arr='customers'){const list=arr==='agents'?agents:arr==='monks'?monks:customers;const item=list.find(x=>x.id===id);if(!item)return;const p=document.getElementById(pid);if(!p)return;const ex=p.querySelector('.cfm');if(ex)ex.remove();const vn=arr==='agents'?'agents':arr==='monks'?'monks':'customers';const sv=arr==='agents'?'sA':arr==='monks'?'nkSync':'sC';const d=document.createElement('div');d.className='cfm bg-red-950/50 border border-red-900/50 rounded-lg p-2.5 mt-2 afi';d.innerHTML=`<p class="text-[10px] text-red-400 mb-1.5">刪除「${item.name}」？</p><div class="flex gap-1.5 justify-end"><button class="bt bt-o bt-sm" onclick="this.closest('.cfm').remove()">取消</button><button class="bt bt-d bt-sm" onclick="${vn}=${vn}.filter(x=>x.id!=='${id}');${sv}();toast('已刪除','i');rV();">刪除</button></div>`;p.appendChild(d);}
+function dICf(id,pid){
+  const item=items.find(i=>i.id===id);
+  if(!item)return;
+  const p=document.getElementById(pid);
+  if(!p)return;
+  const ex=p.querySelector('.cfm');
+  if(ex)ex.remove();
+  const d=document.createElement('div');
+  d.className='cfm bg-red-950/50 border border-red-900/50 rounded-lg p-2.5 mt-2 afi';
+  d.innerHTML=`
+    <p class="text-[10px] text-red-400 mb-1.5">刪除 ${item.code}？</p>
+    <div class="flex gap-1.5 justify-end">
+      <button class="bt bt-o bt-sm" onclick="this.closest('.cfm').remove()">取消</button>
+      <button class="bt bt-d bt-sm" onclick="handleDeleteItem('${id}')">刪除</button>
+    </div>
+  `;
+  p.appendChild(d);
+}
+
+async function handleDeleteItem(id) {
+  try {
+    items = items.filter(i => i.id !== id);
+    if (curUser && sb) {
+      await sb.from('items').delete().eq('id', id);
+    }
+    await sI();
+    clM('M0');
+    toast('已刪除','i');
+    rV();
+  } catch (e) {
+    toast('刪除失敗: ' + e.message, 'e');
+  }
+}
+
+function dMCf(id,pid){
+  const m=makers.find(x=>x.id===id);
+  if(!m)return;
+  const p=document.getElementById(pid);
+  if(!p)return;
+  const ex=p.querySelector('.cfm');
+  if(ex)ex.remove();
+  const d=document.createElement('div');
+  d.className='cfm bg-red-950/50 border border-red-900/50 rounded-lg p-2.5 mt-2 afi';
+  d.innerHTML=`
+    <p class="text-[10px] text-red-400 mb-1.5">刪除「${m.name}」？</p>
+    <div class="flex gap-1.5 justify-end">
+      <button class="bt bt-o bt-sm" onclick="this.closest('.cfm').remove()">取消</button>
+      <button class="bt bt-d bt-sm" onclick="handleDeleteMaker('${id}')">刪除</button>
+    </div>
+  `;
+  p.appendChild(d);
+}
+
+async function handleDeleteMaker(id) {
+  try {
+    makers = makers.filter(x => x.id !== id);
+    if (curUser && sb) {
+      await sb.from('makers').delete().eq('id', id);
+    }
+    await sM();
+    clM('M1');
+    toast('已刪除','i');
+    rV();
+  } catch (e) {
+    toast('刪除失敗: ' + e.message, 'e');
+  }
+}
+function dECf(id,pid,arr='customers'){
+  const list=arr==='agents'?agents:arr==='monks'?monks:customers;
+  const item=list.find(x=>x.id===id);
+  if(!item)return;
+  const p=document.getElementById(pid);
+  if(!p)return;
+  const ex=p.querySelector('.cfm');
+  if(ex)ex.remove();
+  const d=document.createElement('div');
+  d.className='cfm bg-red-950/50 border border-red-900/50 rounded-lg p-2.5 mt-2 afi';
+  d.innerHTML=`
+    <p class="text-[10px] text-red-400 mb-1.5">刪除「${item.name}」？</p>
+    <div class="flex gap-1.5 justify-end">
+      <button class="bt bt-o bt-sm" onclick="this.closest('.cfm').remove()">取消</button>
+      <button class="bt bt-d bt-sm" onclick="handleDeleteEntity('${id}','${arr}')">刪除</button>
+    </div>
+  `;
+  p.appendChild(d);
+}
+
+async function handleDeleteEntity(id, arr) {
+  try {
+    const table = arr === 'agents' ? 'agents' : arr === 'monks' ? 'monks' : 'customers';
+    if (arr === 'agents') agents = agents.filter(x => x.id !== id);
+    else if (arr === 'monks') monks = monks.filter(x => x.id !== id);
+    else customers = customers.filter(x => x.id !== id);
+
+    if (curUser && sb) {
+      await sb.from(table).delete().eq('id', id);
+    }
+
+    if (arr === 'agents') await sA();
+    else if (arr === 'monks') await nkSync();
+    else await sC();
+
+    toast('已刪除','i');
+    rV();
+  } catch (e) {
+    toast('刪除失敗: ' + e.message, 'e');
+  }
+}
 function expD() {
   const data = { items, makers, customers, agents, monks, settings: S, exportDate: new Date().toISOString() };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
