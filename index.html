@@ -551,8 +551,34 @@ async function sI() {
   localStorage.setItem(KI, JSON.stringify(items));
   if (curUser && sb) {
     try {
-      // 批量 upsert（需要表格有主鍵）
-      const { error } = await sb.from('items').upsert(items.map(i => ({...i, user_id: curUser.id})), { onConflict: 'id' });
+      // 批量 upsert（排除数据库中不存在的字段）
+      const itemsToSync = items.map(i => ({
+        id: i.id,
+        code: i.code,
+        image: i.image,
+        imageHash: i.imageHash,
+        region: i.region,
+        painter: i.painter,
+        maker: i.maker,
+        cost: i.cost,
+        extraCost: i.extraCost,
+        price: i.price,
+        taxIncluded: i.taxIncluded,
+        framed: i.framed,
+        purchaseDate: i.purchaseDate,
+        shipmentDate: i.shipmentDate,
+        shipNotes: i.shipNotes,
+        status: i.status,
+        notes: i.notes,
+        custName: i.custName,
+        custPhone: i.custPhone,
+        deposit: i.deposit,
+        balance: i.balance,
+        balanceDue: i.balanceDue,
+        created_at: i.created_at,
+        user_id: curUser.id
+      }));
+      const { error } = await sb.from('items').upsert(itemsToSync, { onConflict: 'id' });
       if (error) throw error;
     } catch (e) { 
       console.error('sI sync error:', e); 
