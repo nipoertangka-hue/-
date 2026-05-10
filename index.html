@@ -328,6 +328,13 @@
   </div>
 
 <script>
+/* ===== 常量和变量声明（必须放在最前面） ===== */
+const KI='tk_items',KM='tk_makers',KC='tk_customers',KA='tk_agents',KN='tk_monks',KS='tk_settings';
+const PAY_OPTS=['現金匯款','微信支付','刷卡支付','找人代付','支付寶支付'];
+const REGIONS=['西藏','尼泊爾','不丹','拉達克','蒙古','內地','其他'];
+const CHAN_OPTS=['展會認識','網路搜尋','朋友介紹','主動開發','社群媒體','廠商自薦','其他'];
+let items=[],makers=[],customers=[],agents=[],monks=[],S={},curImg='',curHash='',shipSelId='';
+
 /* ===== Supabase Auth & Sync ===== */
 window.sb = null;
 let userRole = 'viewer'; // 預設權限為查看者
@@ -648,11 +655,7 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ===== 數據 ===== */
-const KI='tk_items',KM='tk_makers',KC='tk_customers',KA='tk_agents',KN='tk_monks',KS='tk_settings';
-let items=[],makers=[],customers=[],agents=[],monks=[],S={},curImg='',curHash='',shipSelId='';
-const PAY_OPTS=['現金匯款','微信支付','刷卡支付','找人代付','支付寶支付'];
-const REGIONS=['西藏','尼泊爾','不丹','拉達克','蒙古','內地','其他'];
-const CHAN_OPTS=['展會認識','網路搜尋','朋友介紹','主動開發','社群媒體','廠商自薦','其他'];
+// 常量已在脚本顶部声明
 
 function gS() {
   const d = { shopName: '唐卡進銷存管理', currency: '$', codePrefix: 'TK', codeNext: 1, defRegion: '', defTax: true, defFrame: false, alertDays: 180, fontSize: 'medium' };
