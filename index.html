@@ -546,12 +546,12 @@ function saveAllToLocal() {
   localStorage.setItem(KN, JSON.stringify(monks));
 }
 
-// 同步至 Supabase - 只同步基础字段（避免数据库缺少出货相关字段）
+// 同步至 Supabase - 只同步最基础字段
 async function sI() {
   localStorage.setItem(KI, JSON.stringify(items));
   if (curUser && sb) {
     try {
-      // 只同步数据库中确定存在的基础字段
+      // 只同步数据库中确定存在的最基础字段
       const itemsToSync = items.map(i => ({
         id: i.id,
         code: i.code,
@@ -561,7 +561,6 @@ async function sI() {
         painter: i.painter || '',
         maker: i.maker,
         cost: i.cost,
-        extraCost: i.extraCost || 0,
         price: i.price,
         taxIncluded: i.taxIncluded || false,
         framed: i.framed || false,
