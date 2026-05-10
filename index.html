@@ -546,35 +546,28 @@ function saveAllToLocal() {
   localStorage.setItem(KN, JSON.stringify(monks));
 }
 
-// 同步至 Supabase - 使用批量操作並加入錯誤提示
+// 同步至 Supabase - 只同步基础字段（避免数据库缺少出货相关字段）
 async function sI() {
   localStorage.setItem(KI, JSON.stringify(items));
   if (curUser && sb) {
     try {
-      // 批量 upsert（排除数据库中不存在的字段）
+      // 只同步数据库中确定存在的基础字段
       const itemsToSync = items.map(i => ({
         id: i.id,
         code: i.code,
-        image: i.image,
-        imageHash: i.imageHash,
+        image: i.image || '',
+        imageHash: i.imageHash || '',
         region: i.region,
-        painter: i.painter,
+        painter: i.painter || '',
         maker: i.maker,
         cost: i.cost,
-        extraCost: i.extraCost,
+        extraCost: i.extraCost || 0,
         price: i.price,
-        taxIncluded: i.taxIncluded,
-        framed: i.framed,
+        taxIncluded: i.taxIncluded || false,
+        framed: i.framed || false,
         purchaseDate: i.purchaseDate,
-        shipmentDate: i.shipmentDate,
-        shipNotes: i.shipNotes,
-        status: i.status,
-        notes: i.notes,
-        custName: i.custName,
-        custPhone: i.custPhone,
-        deposit: i.deposit,
-        balance: i.balance,
-        balanceDue: i.balanceDue,
+        status: i.status || 'in-stock',
+        notes: i.notes || '',
         created_at: i.created_at,
         user_id: curUser.id
       }));
