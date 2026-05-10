@@ -530,15 +530,23 @@ async function sI() {
   localStorage.setItem(KI, JSON.stringify(items));
   if (curUser && sb) {
     try {
-      // 獲取目前的 ID 列表
-      const ids = items.map(i => i.id);
-      // 先處理刪除 (本地不存在但雲端存在的)
-      if (ids.length > 0) {
-        // 這裡我們採用 Upsert 策略，刪除則需要額外處理。
-        // 為了簡單起見，我們先實作 Upsert
-        for (const item of items) {
-          await sb.from('items').upsert({ ...item, user_id: curUser.id });
-        }
+      // 1. 獲取雲端目前的所有資料
+      const { data: cloudItems, error } = await sb.from('items').select('id').eq('user_id', curUser.id);
+      if (error) throw error;
+      
+      // 2. 找出需要刪除的項目（雲端有但本地沒有的）
+      const cloudIds = new Set(cloudItems.map(i => i.id));
+      const localIds = new Set(items.map(i => i.id));
+      const toDelete = [...cloudIds].filter(id => !localIds.has(id));
+      
+      // 3. 執行刪除
+      if (toDelete.length > 0) {
+        await sb.from('items').delete().in('id', toDelete);
+      }
+      
+      // 4. 執行 upsert（新增或更新）
+      for (const item of items) {
+        await sb.from('items').upsert({ ...item, user_id: curUser.id });
       }
     } catch (e) { console.error('sI sync error:', e); }
   }
@@ -548,6 +556,17 @@ async function sM() {
   localStorage.setItem(KM, JSON.stringify(makers));
   if (curUser && sb) {
     try {
+      const { data: cloudMakers, error } = await sb.from('makers').select('id').eq('user_id', curUser.id);
+      if (error) throw error;
+      
+      const cloudIds = new Set(cloudMakers.map(m => m.id));
+      const localIds = new Set(makers.map(m => m.id));
+      const toDelete = [...cloudIds].filter(id => !localIds.has(id));
+      
+      if (toDelete.length > 0) {
+        await sb.from('makers').delete().in('id', toDelete);
+      }
+      
       for (const m of makers) {
         await sb.from('makers').upsert({ ...m, user_id: curUser.id });
       }
@@ -559,6 +578,17 @@ async function sC() {
   localStorage.setItem(KC, JSON.stringify(customers));
   if (curUser && sb) {
     try {
+      const { data: cloudCustomers, error } = await sb.from('customers').select('id').eq('user_id', curUser.id);
+      if (error) throw error;
+      
+      const cloudIds = new Set(cloudCustomers.map(c => c.id));
+      const localIds = new Set(customers.map(c => c.id));
+      const toDelete = [...cloudIds].filter(id => !localIds.has(id));
+      
+      if (toDelete.length > 0) {
+        await sb.from('customers').delete().in('id', toDelete);
+      }
+      
       for (const c of customers) {
         await sb.from('customers').upsert({ ...c, user_id: curUser.id });
       }
@@ -570,6 +600,17 @@ async function sA() {
   localStorage.setItem(KA, JSON.stringify(agents));
   if (curUser && sb) {
     try {
+      const { data: cloudAgents, error } = await sb.from('agents').select('id').eq('user_id', curUser.id);
+      if (error) throw error;
+      
+      const cloudIds = new Set(cloudAgents.map(a => a.id));
+      const localIds = new Set(agents.map(a => a.id));
+      const toDelete = [...cloudIds].filter(id => !localIds.has(id));
+      
+      if (toDelete.length > 0) {
+        await sb.from('agents').delete().in('id', toDelete);
+      }
+      
       for (const a of agents) {
         await sb.from('agents').upsert({ ...a, user_id: curUser.id });
       }
@@ -581,6 +622,17 @@ async function nkSync() {
   localStorage.setItem(KN, JSON.stringify(monks));
   if (curUser && sb) {
     try {
+      const { data: cloudMonks, error } = await sb.from('monks').select('id').eq('user_id', curUser.id);
+      if (error) throw error;
+      
+      const cloudIds = new Set(cloudMonks.map(n => n.id));
+      const localIds = new Set(monks.map(n => n.id));
+      const toDelete = [...cloudIds].filter(id => !localIds.has(id));
+      
+      if (toDelete.length > 0) {
+        await sb.from('monks').delete().in('id', toDelete);
+      }
+      
       for (const n of monks) {
         await sb.from('monks').upsert({ ...n, user_id: curUser.id });
       }
@@ -636,21 +688,6 @@ function lD() {
   try { agents = JSON.parse(localStorage.getItem(KA)) || []; } catch (e) { agents = []; }
   try { monks = JSON.parse(localStorage.getItem(KN)) || []; } catch (e) { monks = []; }
   S = gS();
-}
-function sI() {
-  localStorage.setItem(KI, JSON.stringify(items));
-}
-function sM() {
-  localStorage.setItem(KM, JSON.stringify(makers));
-}
-function sC() {
-  localStorage.setItem(KC, JSON.stringify(customers));
-}
-function sA() {
-  localStorage.setItem(KA, JSON.stringify(agents));
-}
-function nkSync() {
-  localStorage.setItem(KN, JSON.stringify(monks));
 }
 function gId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
