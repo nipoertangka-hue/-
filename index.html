@@ -523,8 +523,8 @@ async function syncFromCloud() {
       if (stepEl) stepEl.textContent = step.label;
       if (barEl)  barEl.style.width  = step.pct + '%';
 
-      // 只抓取當前使用者的資料
-      const { data, error } = await sb.from(step.table).select('*').eq('user_id', curUser.id);
+      // 抓取所有数据（权限由前端控制，而非数据隔离）
+      const { data, error } = await sb.from(step.table).select('*');
       // 只有無錯誤且有資料時才覆蓋（保留本地快取作離線備援）
       if (!error && data) {
         if (data.length > 0) setters[step.key](data);
@@ -551,6 +551,12 @@ function saveAllToLocal() {
 
 // 同步至 Supabase - 使用数据库实际字段名（小写无驼峰）
 async function sI() {
+  // 检查权限：只有 editor 和 admin 可以同步数据
+  if (userRole === 'viewer') {
+    console.warn('查看者模式，无法同步数据');
+    return;
+  }
+  
   localStorage.setItem(KI, JSON.stringify(items));
   if (curUser && sb) {
     try {
@@ -593,6 +599,7 @@ async function sI() {
 }
 
 async function sM() {
+  if (userRole === 'viewer') return;
   localStorage.setItem(KM, JSON.stringify(makers));
   if (curUser && sb) {
     try {
@@ -606,6 +613,7 @@ async function sM() {
 }
 
 async function sC() {
+  if (userRole === 'viewer') return;
   localStorage.setItem(KC, JSON.stringify(customers));
   if (curUser && sb) {
     try {
@@ -619,6 +627,7 @@ async function sC() {
 }
 
 async function sA() {
+  if (userRole === 'viewer') return;
   localStorage.setItem(KA, JSON.stringify(agents));
   if (curUser && sb) {
     try {
@@ -632,6 +641,7 @@ async function sA() {
 }
 
 async function nkSync() {
+  if (userRole === 'viewer') return;
   localStorage.setItem(KN, JSON.stringify(monks));
   if (curUser && sb) {
     try {
@@ -1930,6 +1940,12 @@ function dICf(id,pid){
 }
 
 async function handleDeleteItem(id) {
+  // 检查权限：只有 editor 和 admin 可以删除
+  if (userRole === 'viewer') {
+    toast('查看者模式，无法删除数据', 'e');
+    return;
+  }
+  
   try {
     items = items.filter(i => i.id !== id);
     if (curUser && sb) {
@@ -1964,6 +1980,11 @@ function dMCf(id,pid){
 }
 
 async function handleDeleteMaker(id) {
+  if (userRole === 'viewer') {
+    toast('查看者模式，无法删除数据', 'e');
+    return;
+  }
+  
   try {
     makers = makers.filter(x => x.id !== id);
     if (curUser && sb) {
@@ -1998,6 +2019,11 @@ function dECf(id,pid,arr='customers'){
 }
 
 async function handleDeleteEntity(id, arr) {
+  if (userRole === 'viewer') {
+    toast('查看者模式，无法删除数据', 'e');
+    return;
+  }
+  
   try {
     const table = arr === 'agents' ? 'agents' : arr === 'monks' ? 'monks' : 'customers';
     if (arr === 'agents') agents = agents.filter(x => x.id !== id);
