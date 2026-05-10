@@ -502,9 +502,11 @@ async function syncFromCloud() {
 
       const { data, error } = await sb.from(step.table).select('*').eq('user_id', curUser.id);
       if (!error && data) {
-        if (data.length > 0) setters[step.key](data);
-        // 若雲端該表為空，本地也清空（避免離線舊資料誤導）
-        else setters[step.key]([]);
+        // 只有當雲端有資料時才更新本地（不允許雲端空資料覆蓋本地）
+        if (data.length > 0) {
+          setters[step.key](data);
+        }
+        // 若雲端為空，保留本地資料（不覆蓋）
       }
     }
 
@@ -515,7 +517,6 @@ async function syncFromCloud() {
     toast('同步失敗，使用本地快取', 'i');
   }
 }
-
 function saveAllToLocal() {
   localStorage.setItem(KI, JSON.stringify(items));
   localStorage.setItem(KM, JSON.stringify(makers));
