@@ -900,10 +900,8 @@ function oMM(eid){
     const regOpts=REGIONS.map(r=>`<option value="${r}">${r}</option>`).join('');
     const chOpts=CHAN_OPTS.map(c=>`<option value="${c}">${c}</option>`).join('');
     if(eid){const m=makers.find(x=>x.id===eid);if(!m)return;
-    document.getElementById('M0B').innerHTML=`<input type="hidden" id="mEid" value="${eid}"><div class="grid grid-cols-2 gap-2.5"><div class="col-span-2"><label class="fl">廠商名稱 *</label><input type="text" id="mNm" class="fi" value="${m.name}"></div><div><label class="fl">畫師名稱</label><input type="text" id="mPt" class="fi" value="${m.painter||''}" placeholder="自訂輸入"></div><div><label class="fl">聯絡人</label><input type="text" id="mCt" class="fi" value="${m.contact||''}"></div><div><label class="fl">地區 *</label><select id="mRg" class="fi"><option value="">請選擇</option>${regOpts}</select></div><div><label class="fl">支付方式</label><select id="mPy" class="fi"><option value="">請選擇</option>${payOpts}</select></div><div><label class="fl">電話</label><input type="tel" id="mPh" class="fi" value="${m.phone||''}" inputmode="tel"></div><div><label class="fl">WhatsApp</label><input type="tel" id="mWa" class="fi" value="${m.whatsapp||''}" inputmode="tel"></div><div><label class="fl">LINE ID</label><input type="text" id="mLn" class="fi" value="${m.line||''}"></div><div><label class="fl">渠道來源</label><select id="mCh" class="fi"><option value="">請選擇</option>${chOpts}</select></div><div class="col-span-2"><label class="fl">備註</label><textarea id="mNt" class="fi" rows="2">${m.notes||''}</textarea></div></div><div class="flex justify-end gap-2 mt-4 pb-2"><button class="bt bt-o" onclick="clM('M0')">取消</button><button class="bt bt-g" onclick="sMk()"><span class="material-icons-outlined text-xs">save</span>儲存</button></div>`;
-    setTimeout(()=>{document.getElementById('mRg').value=m.region||'';document.getElementById('mPy').value=m.payment||'';document.getElementById('mCh').value=m.channel||'';},10);
+    setTimeout(()=>{document.getElementById('mRg').value=m.region||'';document.getElementById('mPy').value=m.payment||'';document.getElementById('mCh').value=m.channel||'';document.getElementById('mWc').value=m.wechat||'';},10);
     }else{
-    document.getElementById('M0B').innerHTML=`<input type="hidden" id="mEid" value=""><div class="grid grid-cols-2 gap-2.5"><div class="col-span-2"><label class="fl">廠商名稱 *</label><input type="text" id="mNm" class="fi" placeholder="例：拉薩吉祥唐卡工作室"></div><div><label class="fl">畫師名稱</label><input type="text" id="mPt" class="fi" placeholder="自訂輸入"></div><div><label class="fl">聯絡人</label><input type="text" id="mCt" class="fi"></div><div><label class="fl">地區 *</label><select id="mRg" class="fi"><option value="">請選擇</option>${regOpts}</select></div><div><label class="fl">支付方式</label><select id="mPy" class="fi"><option value="">請選擇</option>${payOpts}</select></div><div><label class="fl">電話</label><input type="tel" id="mPh" class="fi" inputmode="tel"></div><div><label class="fl">WhatsApp</label><input type="tel" id="mWa" class="fi" inputmode="tel"></div><div><label class="fl">LINE ID</label><input type="text" id="mLn" class="fi"></div><div><label class="fl">渠道來源</label><select id="mCh" class="fi"><option value="">請選擇</option>${chOpts}</select></div><div class="col-span-2"><label class="fl">備註</label><textarea id="mNt" class="fi" rows="2"></textarea></div></div><div class="flex justify-end gap-2 mt-4 pb-2"><button class="bt bt-o" onclick="clM('M0')">取消</button><button class="bt bt-g" onclick="sMk()"><span class="material-icons-outlined text-xs">save</span>儲存</button></div>`;
     }opM('M0');}
 function sMk() {
   const id = document.getElementById('mEid').value,
@@ -916,11 +914,12 @@ function sMk() {
     wa = document.getElementById('mWa').value.trim(),
     ln = document.getElementById('mLn').value.trim(),
     ch = document.getElementById('mCh').value,
+    wc = document.getElementById('mWc').value.trim(),
     nt = document.getElementById('mNt').value.trim();
   if (!nm) { toast('請輸入名稱', 'e'); return; }
   if (!rg) { toast('請選擇地區', 'e'); return; }
   if (makers.some(m => m.name === nm && m.id !== id)) { toast('名稱已存在', 'e'); return; }
-  const d = { name: nm, painter: pt, contact: ct, region: rg, payment: py, phone: ph, whatsapp: wa, line: ln, channel: ch, notes: nt };
+  const d = { name: nm, painter: pt, contact: ct, region: rg, payment: py, phone: ph, whatsapp: wa, line: ln, wechat: wc,channel: ch, notes: nt };
   if (id) {
     const i = makers.findIndex(m => m.id === id);
     if (i !== -1) makers[i] = { ...makers[i], ...d };
