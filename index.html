@@ -556,17 +556,17 @@ async function sI() {
         id: i.id,
         code: i.code,
         image: i.image || '',
-        imagehash: i.imageHash || '',  // 注意：数据库是 imagehash
+        imagehash: i.imageHash || '',
         region: i.region,
         maker: i.maker,
         painter: i.painter || '',
         cost: i.cost,
         price: i.price,
-        extracost: i.extraCost || 0,  // 注意：数据库是 extracost
+        extracost: i.extraCost || 0,
         taxincluded: i.taxIncluded || false,
         framed: i.framed || false,
-        purchasedate: i.purchaseDate || '',  // 注意：数据库是 purchasedate
-        shipmentdate: i.shipmentDate || '',
+        purchasedate: i.purchaseDate || null,
+        shipmentdate: i.shipmentDate || null,
         shipnotes: i.shipNotes || '',
         status: i.status || 'in-stock',
         notes: i.notes || '',
@@ -575,7 +575,7 @@ async function sI() {
         agentname: i.agentName || '',
         deposit: i.deposit || 0,
         balance: i.balance || 0,
-        balancedue: i.balanceDue || '',
+        balancedue: i.balanceDue || null,
         createdat: i.created_at || new Date().toISOString(),
         created_at: i.created_at,
         user_id: curUser.id
