@@ -751,20 +751,53 @@ function hIU(e) {
   };
   r.readAsDataURL(f);
 }
+// 优化后的图像哈希算法（使用 dHash + 色彩通道）
 function eH(img) {
-  const c = document.createElement('canvas'), s = 32;
+  const c = document.createElement('canvas'), s = 64; // 提高解析度到 64x64
   c.width = s;
   c.height = s;
-  c.getContext('2d').drawImage(img, 0, 0, s, s);
-  const d = c.getContext('2d').getImageData(0, 0, s, s).data, h = [];
-  for (let i = 0; i < d.length; i += 4) h.push((d[i] * .299 + d[i + 1] * .587 + d[i + 2] * .114) / 255);
-  return h;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0, s, s);
+  const d = ctx.getImageData(0, 0, s, s).data;
+  
+  // 使用 dHash（差异哈希）算法，分别计算 R、G、B 三个通道
+  const hash = { r: [], g: [], b: [] };
+  
+  for (let y = 0; y < s; y++) {
+    for (let x = 0; x < s - 1; x++) {
+      const idx = (y * s + x) * 4;
+      const nextIdx = idx + 4;
+      
+      // 计算相邻像素的差异
+      hash.r.push(d[idx] > d[nextIdx] ? 1 : 0);      // R 通道
+      hash.g.push(d[idx + 1] > d[nextIdx + 1] ? 1 : 0); // G 通道
+      hash.b.push(d[idx + 2] > d[nextIdx + 2] ? 1 : 0); // B 通道
+    }
+  }
+  
+  return hash;
 }
+
+// 优化后的相似度计算（使用汉明距离）
 function cS(a, b) {
-  if (!a || !b || a.length !== b.length) return 0;
-  let s = 0;
-  for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2;
-  return Math.max(0, 1 - Math.sqrt(s) / Math.sqrt(a.length));
+  if (!a || !b || !a.r || !b.r) return 0;
+  
+  let totalBits = 0;
+  let diffBits = 0;
+  
+  // 分别比较 R、G、B 三个通道
+  ['r', 'g', 'b'].forEach(channel => {
+    const len = Math.min(a[channel].length, b[channel].length);
+    for (let i = 0; i < len; i++) {
+      totalBits++;
+      if (a[channel][i] !== b[channel][i]) {
+        diffBits++;
+      }
+    }
+  });
+  
+  // 相似度 = 1 - (不同位数 / 总位数)
+  return totalBits > 0 ? 1 - (diffBits / totalBits) : 0;
 }
 document.addEventListener('DOMContentLoaded', () => {
   ['uZ', 'scZ'].forEach(id => {
@@ -1161,7 +1194,7 @@ function expPrint(){
 
 /* ===== 掃圖 ===== */
 function rSc(){return `<div class="afu max-w-lg mx-auto"><div class="text-center mb-4"><h3 class="fs text-base font-bold mb-1">掃圖識別</h3><p class="text-[10px] text-gold-700">上傳或拍攝比對庫存</p></div><div class="mb-3"><div class="flex gap-2"><input type="text" id="scCode" class="fi flex-1" placeholder="輸入編號快速查找..." oninput="sCC()"><button class="bt bt-g px-3 text-xs" onclick="sCC()"><span class="material-icons-outlined text-xs">search</span></button></div><div id="scCodeR" class="mt-2 space-y-2"></div></div><div class="uz mb-4" id="scZ" onclick="document.getElementById('scInp').click()" style="min-height:160px;display:flex;align-items:center;justify-content:center;"><div id="scPH"><span class="material-icons-outlined text-3xl text-gold-800 mb-1 block">photo_camera</span><p class="text-[10px] text-gold-600">點擊上傳或拍攝</p></div><div id="scPW" class="hidden relative w-full"><img id="scPV" class="max-h-48 mx-auto rounded-lg"><div class="sln" id="scLN"></div></div></div><input type="file" id="scInp" accept="image/*" capture="environment" class="hidden" onchange="hSU(event)"><div id="scR" class="space-y-2.5"></div></div>`;}
-function sCC(){const c=document.getElementById('scCode').value.trim().toUpperCase();const res=document.getElementById('scCodeR');if(!c){res.innerHTML='';return;}const ms=items.filter(i=>i.code.toUpperCase().includes(c)).slice(0,5);if(!ms.length){res.innerHTML='<div class="text-center py-4 bg-ink-300 rounded-xl border border-ink-100"><p class="text-[10px] text-gold-600">未找到符合編號的產品</p></div>';return;}res.innerHTML=ms.map((m,i)=>`<div class="bg-ink-300 border border-ink-100 rounded-xl p-3 flex gap-3 afu" style="animation-delay:${i*.1}s" onclick="sDt('${m.id}')"><div class="w-14 h-18 rounded overflow-hidden bg-ink-500 flex-shrink-0">${m.image?`<img src="${m.image}" class="w-full h-full object-cover">`:''}</div><div class="flex-1 min-w-0"><div class="flex justify-between mb-1"><div><p class="text-xs font-bold">${m.code}</p><p class="text-[9px] text-gold-700">${m.region} · ${m.painter||m.maker}</p></div></div><div class="grid grid-cols-2 gap-1.5"><div class="bg-ink-600 rounded p-1.5"><p class="text-[8px] text-gold-800">售價</p><p class="fs font-bold text-gold-400 text-[11px]">${fM(m.price)}</p></div><div class="bg-ink-600 rounded p-1.5"><p class="text-[8px] text-gold-800">成本</p><p class="text-[10px] text-gold-600">${fM(m.cost)}</p></div></div></div></div>`).join('');}
+function sCC(){const c=document.getElementById('scCode').value.trim().toUpperCase();const res=document.getElementById('scCodeR');if(!c){res.innerHTML='';return;}const ms=items.filter(i=>i.code.toUpperCase().includes(c));if(!ms.length){res.innerHTML='<div class="text-center py-4 bg-ink-300 rounded-xl border border-ink-100"><p class="text-[10px] text-gold-600">未找到符合編號的產品</p></div>';return;}res.innerHTML=`<p class="text-[9px] text-gold-700 mb-1">找到 ${ms.length} 筆結果</p>`+ms.map((m,i)=>`<div class="bg-ink-300 border border-ink-100 rounded-xl p-3 flex gap-3 afu" style="animation-delay:${i*.1}s" onclick="sDt('${m.id}')"><div class="w-14 h-18 rounded overflow-hidden bg-ink-500 flex-shrink-0">${m.image?`<img src="${m.image}" class="w-full h-full object-cover">`:''}</div><div class="flex-1 min-w-0"><div class="flex justify-between mb-1"><div><p class="text-xs font-bold">${m.code}</p><p class="text-[9px] text-gold-700">${m.region} · ${m.painter||m.maker}</p></div></div><div class="grid grid-cols-2 gap-1.5"><div class="bg-ink-600 rounded p-1.5"><p class="text-[8px] text-gold-800">售價</p><p class="fs font-bold text-gold-400 text-[11px]">${fM(m.price)}</p></div><div class="bg-ink-600 rounded p-1.5"><p class="text-[8px] text-gold-800">成本</p><p class="text-[10px] text-gold-600">${fM(m.cost)}</p></div></div></div></div>`).join('');}
 function hSU(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=function(ev){const img=new Image();img.onload=function(){document.getElementById('scPH').classList.add('hidden');document.getElementById('scPW').classList.remove('hidden');document.getElementById('scPV').src=ev.target.result;document.getElementById('scZ').classList.add('hi');document.getElementById('scLN').style.display='block';const hash=eH(img),wh=items.filter(i=>i.imageHash&&i.imageHash.length>0);setTimeout(()=>{document.getElementById('scLN').style.display='none';const res=document.getElementById('scR');if(!wh.length){res.innerHTML='<div class="text-center py-8 bg-ink-300 rounded-xl border border-ink-100"><p class="text-[10px] text-gold-600">庫存無帶圖片唐卡</p></div>';return;}const ms=wh.map(item=>({item,similarity:cS(hash,item.imageHash)})).sort((a,b)=>b.similarity-a.similarity).slice(0,5);if(ms[0].similarity<.75){res.innerHTML=`<div class="text-center py-8 bg-ink-300 rounded-xl border border-ink-100"><p class="text-[10px] text-gold-600">未匹配 · ${(ms[0].similarity*100).toFixed(1)}%</p></div>`;return;}res.innerHTML=ms.filter(m=>m.similarity>=.75).map((m,i)=>`<div class="bg-ink-300 border border-ink-100 rounded-xl p-3 flex gap-3 afu" style="animation-delay:${i*.1}s" onclick="sDt('${m.item.id}')"><div class="w-14 h-18 rounded overflow-hidden bg-ink-500 flex-shrink-0">${m.item.image?`<img src="${m.item.image}" class="w-full h-full object-cover">`:''}</div><div class="flex-1 min-w-0"><div class="flex justify-between mb-1"><div><p class="text-xs font-bold">${m.item.code}</p><p class="text-[9px] text-gold-700">${m.item.region} · ${m.item.painter||m.item.maker}</p></div><p class="fs font-bold text-lg ${(m.similarity>.95?'text-green-400':m.similarity>.85?'text-gold-400':'text-gold-600')}">${(m.similarity*100).toFixed(0)}%</p></div><div class="grid grid-cols-2 gap-1.5"><div class="bg-ink-600 rounded p-1.5"><p class="text-[8px] text-gold-800">售價</p><p class="fs font-bold text-gold-400 text-[11px]">${fM(m.item.price)}</p></div><div class="bg-ink-600 rounded p-1.5"><p class="text-[8px] text-gold-800">成本</p><p class="text-[10px] text-gold-600">${fM(m.item.cost)}</p></div></div></div></div>`).join('');},1000);};img.src=ev.target.result;};r.readAsDataURL(f);}
 
 /* ===== 進出記錄 ===== */
