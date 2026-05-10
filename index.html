@@ -546,27 +546,37 @@ function saveAllToLocal() {
   localStorage.setItem(KN, JSON.stringify(monks));
 }
 
-// 同步至 Supabase - 只同步最基础字段
+// 同步至 Supabase - 使用数据库实际字段名（小写无驼峰）
 async function sI() {
   localStorage.setItem(KI, JSON.stringify(items));
   if (curUser && sb) {
     try {
-      // 只同步数据库中确定存在的最基础字段
+      // 将前端驼峰字段映射到数据库小写字段
       const itemsToSync = items.map(i => ({
         id: i.id,
         code: i.code,
         image: i.image || '',
-        imageHash: i.imageHash || '',
+        imagehash: i.imageHash || '',  // 注意：数据库是 imagehash
         region: i.region,
-        painter: i.painter || '',
         maker: i.maker,
+        painter: i.painter || '',
         cost: i.cost,
         price: i.price,
-        taxIncluded: i.taxIncluded || false,
+        extracost: i.extraCost || 0,  // 注意：数据库是 extracost
+        taxincluded: i.taxIncluded || false,
         framed: i.framed || false,
-        purchaseDate: i.purchaseDate,
+        purchasedate: i.purchaseDate || '',  // 注意：数据库是 purchasedate
+        shipmentdate: i.shipmentDate || '',
+        shipnotes: i.shipNotes || '',
         status: i.status || 'in-stock',
         notes: i.notes || '',
+        custname: i.custName || '',
+        custphone: i.custPhone || '',
+        agentname: i.agentName || '',
+        deposit: i.deposit || 0,
+        balance: i.balance || 0,
+        balancedue: i.balanceDue || '',
+        createdat: i.created_at || new Date().toISOString(),
         created_at: i.created_at,
         user_id: curUser.id
       }));
