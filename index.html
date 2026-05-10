@@ -513,7 +513,8 @@ async function syncFromCloud() {
       if (stepEl) stepEl.textContent = step.label;
       if (barEl)  barEl.style.width  = step.pct + '%';
 
-      const { data, error } = await sb.from(step.table).select('*');
+      // 只抓取當前使用者的資料
+      const { data, error } = await sb.from(step.table).select('*').eq('user_id', curUser.id);
       // 只有無錯誤且有資料時才覆蓋（保留本地快取作離線備援）
       if (!error && data) {
         if (data.length > 0) setters[step.key](data);
@@ -538,22 +539,18 @@ function saveAllToLocal() {
   localStorage.setItem(KN, JSON.stringify(monks));
 }
 
-// 攔截原本的儲存函數，加入 Supabase 同步
+// 同步至 Supabase - 使用批量操作並加入錯誤提示
 async function sI() {
   localStorage.setItem(KI, JSON.stringify(items));
   if (curUser && sb) {
     try {
-      // 獲取目前的 ID 列表
-      const ids = items.map(i => i.id);
-      // 先處理刪除 (本地不存在但雲端存在的)
-      if (ids.length > 0) {
-        // 這裡我們採用 Upsert 策略，刪除則需要額外處理。
-        // 為了簡單起見，我們先實作 Upsert
-        for (const item of items) {
-          await sb.from('items').upsert({ ...item, user_id: curUser.id });
-        }
-      }
-    } catch (e) { console.error('sI sync error:', e); }
+      // 批量 upsert（需要表格有主鍵）
+      const { error } = await sb.from('items').upsert(items.map(i => ({...i, user_id: curUser.id})), { onConflict: 'id' });
+      if (error) throw error;
+    } catch (e) { 
+      console.error('sI sync error:', e); 
+      toast('庫存同步失敗: ' + e.message, 'e');
+    }
   }
 }
 
@@ -561,10 +558,12 @@ async function sM() {
   localStorage.setItem(KM, JSON.stringify(makers));
   if (curUser && sb) {
     try {
-      for (const m of makers) {
-        await sb.from('makers').upsert({ ...m, user_id: curUser.id });
-      }
-    } catch (e) { console.error('sM sync error:', e); }
+      const { error } = await sb.from('makers').upsert(makers.map(m => ({...m, user_id: curUser.id})), { onConflict: 'id' });
+      if (error) throw error;
+    } catch (e) { 
+      console.error('sM sync error:', e); 
+      toast('廠商同步失敗: ' + e.message, 'e');
+    }
   }
 }
 
@@ -572,10 +571,12 @@ async function sC() {
   localStorage.setItem(KC, JSON.stringify(customers));
   if (curUser && sb) {
     try {
-      for (const c of customers) {
-        await sb.from('customers').upsert({ ...c, user_id: curUser.id });
-      }
-    } catch (e) { console.error('sC sync error:', e); }
+      const { error } = await sb.from('customers').upsert(customers.map(c => ({...c, user_id: curUser.id})), { onConflict: 'id' });
+      if (error) throw error;
+    } catch (e) { 
+      console.error('sC sync error:', e); 
+      toast('客戶同步失敗: ' + e.message, 'e');
+    }
   }
 }
 
@@ -583,10 +584,12 @@ async function sA() {
   localStorage.setItem(KA, JSON.stringify(agents));
   if (curUser && sb) {
     try {
-      for (const a of agents) {
-        await sb.from('agents').upsert({ ...a, user_id: curUser.id });
-      }
-    } catch (e) { console.error('sA sync error:', e); }
+      const { error } = await sb.from('agents').upsert(agents.map(a => ({...a, user_id: curUser.id})), { onConflict: 'id' });
+      if (error) throw error;
+    } catch (e) { 
+      console.error('sA sync error:', e); 
+      toast('代理同步失敗: ' + e.message, 'e');
+    }
   }
 }
 
@@ -594,10 +597,12 @@ async function nkSync() {
   localStorage.setItem(KN, JSON.stringify(monks));
   if (curUser && sb) {
     try {
-      for (const n of monks) {
-        await sb.from('monks').upsert({ ...n, user_id: curUser.id });
-      }
-    } catch (e) { console.error('nkSync error:', e); }
+      const { error } = await sb.from('monks').upsert(monks.map(n => ({...n, user_id: curUser.id})), { onConflict: 'id' });
+      if (error) throw error;
+    } catch (e) { 
+      console.error('nkSync error:', e); 
+      toast('僧人同步失敗: ' + e.message, 'e');
+    }
   }
 }
 
@@ -650,21 +655,8 @@ function lD() {
   try { monks = JSON.parse(localStorage.getItem(KN)) || []; } catch (e) { monks = []; }
   S = gS();
 }
-function sI() {
-  localStorage.setItem(KI, JSON.stringify(items));
-}
-function sM() {
-  localStorage.setItem(KM, JSON.stringify(makers));
-}
-function sC() {
-  localStorage.setItem(KC, JSON.stringify(customers));
-}
-function sA() {
-  localStorage.setItem(KA, JSON.stringify(agents));
-}
-function nkSync() {
-  localStorage.setItem(KN, JSON.stringify(monks));
-}
+// 刪除重複的 sI(), sM(), sC(), sA(), nkSync() 定義
+// 使用第542-602行的版本（有 Supabase 同步功能）
 function gId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 }
