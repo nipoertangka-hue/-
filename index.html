@@ -500,8 +500,7 @@ async function syncFromCloud() {
       if (stepEl) stepEl.textContent = step.label;
       if (barEl)  barEl.style.width  = step.pct + '%';
 
-      const { data, error } = await sb.from(step.table).select('*');
-      // 只有無錯誤且有資料時才覆蓋（保留本地快取作離線備援）
+      const { data, error } = await sb.from(step.table).select('*').eq('user_id', curUser.id);
       if (!error && data) {
         if (data.length > 0) setters[step.key](data);
         // 若雲端該表為空，本地也清空（避免離線舊資料誤導）
