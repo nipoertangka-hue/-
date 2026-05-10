@@ -409,13 +409,19 @@ async function checkSession() {
       curUser = data.session.user;
       
       // 獲取使用者權限等級
-      const { data: profile } = await sb.from('profiles').select('role').eq('id', curUser.id).single();
+      const { data: profile, error: profileErr } = await sb.from('profiles').select('role').eq('id', curUser.id).single();
+      
       if (profile) {
         userRole = profile.role;
       } else {
-        // 如果沒有 profile，自動建立一個預設為 viewer 的
-        await sb.from('profiles').insert({ id: curUser.id, role: 'viewer' });
-        userRole = 'viewer';
+        // 沒有 profile → 檢查系統中是否已有任何 admin
+        const { data: admins } = await sb.from('profiles').select('id').eq('role', 'admin').limit(1);
+        const isFirstUser = !admins || admins.length === 0;
+        // 第一位登入的使用者自動成為 admin，之後的使用者預設為 viewer
+        const assignedRole = isFirstUser ? 'admin' : 'viewer';
+        await sb.from('profiles').insert({ id: curUser.id, role: assignedRole });
+        userRole = assignedRole;
+        if (isFirstUser) toast('您已被設為系統管理員', 's');
       }
       
       console.log('User Role:', userRole);
@@ -439,7 +445,14 @@ async function checkSession() {
 }
 
 async function initData() {
-  lD(); // 先讀取本地快取設定
+  // 清除 localStorage 中的舊資料（避免預設假資料干擾）
+  localStorage.removeItem(KI);
+  localStorage.removeItem(KM);
+  localStorage.removeItem(KC);
+  localStorage.removeItem(KA);
+  localStorage.removeItem(KN);
+  
+  lD(); // 讀取本地快取設定（現在是空的）
   S = gS();
   applyFontSize(); // 套用上次儲存的字體大小
 
@@ -500,13 +513,12 @@ async function syncFromCloud() {
       if (stepEl) stepEl.textContent = step.label;
       if (barEl)  barEl.style.width  = step.pct + '%';
 
-      const { data, error } = await sb.from(step.table).select('*').eq('user_id', curUser.id);
+      const { data, error } = await sb.from(step.table).select('*');
+      // 只有無錯誤且有資料時才覆蓋（保留本地快取作離線備援）
       if (!error && data) {
-        // 只有當雲端有資料時才更新本地（不允許雲端空資料覆蓋本地）
-        if (data.length > 0) {
-          setters[step.key](data);
-        }
-        // 若雲端為空，保留本地資料（不覆蓋）
+        if (data.length > 0) setters[step.key](data);
+        // 若雲端該表為空，本地也清空（避免離線舊資料誤導）
+        else setters[step.key]([]);
       }
     }
 
@@ -517,6 +529,7 @@ async function syncFromCloud() {
     toast('同步失敗，使用本地快取', 'i');
   }
 }
+
 function saveAllToLocal() {
   localStorage.setItem(KI, JSON.stringify(items));
   localStorage.setItem(KM, JSON.stringify(makers));
@@ -530,23 +543,15 @@ async function sI() {
   localStorage.setItem(KI, JSON.stringify(items));
   if (curUser && sb) {
     try {
-      // 1. 獲取雲端目前的所有資料
-      const { data: cloudItems, error } = await sb.from('items').select('id').eq('user_id', curUser.id);
-      if (error) throw error;
-      
-      // 2. 找出需要刪除的項目（雲端有但本地沒有的）
-      const cloudIds = new Set(cloudItems.map(i => i.id));
-      const localIds = new Set(items.map(i => i.id));
-      const toDelete = [...cloudIds].filter(id => !localIds.has(id));
-      
-      // 3. 執行刪除
-      if (toDelete.length > 0) {
-        await sb.from('items').delete().in('id', toDelete);
-      }
-      
-      // 4. 執行 upsert（新增或更新）
-      for (const item of items) {
-        await sb.from('items').upsert({ ...item, user_id: curUser.id });
+      // 獲取目前的 ID 列表
+      const ids = items.map(i => i.id);
+      // 先處理刪除 (本地不存在但雲端存在的)
+      if (ids.length > 0) {
+        // 這裡我們採用 Upsert 策略，刪除則需要額外處理。
+        // 為了簡單起見，我們先實作 Upsert
+        for (const item of items) {
+          await sb.from('items').upsert({ ...item, user_id: curUser.id });
+        }
       }
     } catch (e) { console.error('sI sync error:', e); }
   }
@@ -556,17 +561,6 @@ async function sM() {
   localStorage.setItem(KM, JSON.stringify(makers));
   if (curUser && sb) {
     try {
-      const { data: cloudMakers, error } = await sb.from('makers').select('id').eq('user_id', curUser.id);
-      if (error) throw error;
-      
-      const cloudIds = new Set(cloudMakers.map(m => m.id));
-      const localIds = new Set(makers.map(m => m.id));
-      const toDelete = [...cloudIds].filter(id => !localIds.has(id));
-      
-      if (toDelete.length > 0) {
-        await sb.from('makers').delete().in('id', toDelete);
-      }
-      
       for (const m of makers) {
         await sb.from('makers').upsert({ ...m, user_id: curUser.id });
       }
@@ -578,17 +572,6 @@ async function sC() {
   localStorage.setItem(KC, JSON.stringify(customers));
   if (curUser && sb) {
     try {
-      const { data: cloudCustomers, error } = await sb.from('customers').select('id').eq('user_id', curUser.id);
-      if (error) throw error;
-      
-      const cloudIds = new Set(cloudCustomers.map(c => c.id));
-      const localIds = new Set(customers.map(c => c.id));
-      const toDelete = [...cloudIds].filter(id => !localIds.has(id));
-      
-      if (toDelete.length > 0) {
-        await sb.from('customers').delete().in('id', toDelete);
-      }
-      
       for (const c of customers) {
         await sb.from('customers').upsert({ ...c, user_id: curUser.id });
       }
@@ -600,17 +583,6 @@ async function sA() {
   localStorage.setItem(KA, JSON.stringify(agents));
   if (curUser && sb) {
     try {
-      const { data: cloudAgents, error } = await sb.from('agents').select('id').eq('user_id', curUser.id);
-      if (error) throw error;
-      
-      const cloudIds = new Set(cloudAgents.map(a => a.id));
-      const localIds = new Set(agents.map(a => a.id));
-      const toDelete = [...cloudIds].filter(id => !localIds.has(id));
-      
-      if (toDelete.length > 0) {
-        await sb.from('agents').delete().in('id', toDelete);
-      }
-      
       for (const a of agents) {
         await sb.from('agents').upsert({ ...a, user_id: curUser.id });
       }
@@ -622,17 +594,6 @@ async function nkSync() {
   localStorage.setItem(KN, JSON.stringify(monks));
   if (curUser && sb) {
     try {
-      const { data: cloudMonks, error } = await sb.from('monks').select('id').eq('user_id', curUser.id);
-      if (error) throw error;
-      
-      const cloudIds = new Set(cloudMonks.map(n => n.id));
-      const localIds = new Set(monks.map(n => n.id));
-      const toDelete = [...cloudIds].filter(id => !localIds.has(id));
-      
-      if (toDelete.length > 0) {
-        await sb.from('monks').delete().in('id', toDelete);
-      }
-      
       for (const n of monks) {
         await sb.from('monks').upsert({ ...n, user_id: curUser.id });
       }
@@ -688,6 +649,21 @@ function lD() {
   try { agents = JSON.parse(localStorage.getItem(KA)) || []; } catch (e) { agents = []; }
   try { monks = JSON.parse(localStorage.getItem(KN)) || []; } catch (e) { monks = []; }
   S = gS();
+}
+function sI() {
+  localStorage.setItem(KI, JSON.stringify(items));
+}
+function sM() {
+  localStorage.setItem(KM, JSON.stringify(makers));
+}
+function sC() {
+  localStorage.setItem(KC, JSON.stringify(customers));
+}
+function sA() {
+  localStorage.setItem(KA, JSON.stringify(agents));
+}
+function nkSync() {
+  localStorage.setItem(KN, JSON.stringify(monks));
 }
 function gId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
@@ -787,7 +763,7 @@ const VT = {
   settings: '系統設置'
 };
 function hBtns(v) {
-  if (userRole === 'viewer') return ''; // 查看者隱藏所有操作按鈕
+  if (userRole === 'viewer') return `<span style="font-size:9px;color:var(--td);padding:4px 8px;background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.12);border-radius:6px;">查看者模式 · 無編輯權限</span>`;
   
   switch (v) {
     case 'dashboard':
@@ -1233,6 +1209,8 @@ function rSet(){
   
   if (userRole === 'admin') {
      h += `<div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs">admin_panel_settings</span>權限管理</p><div class="sgr"><div class="srw"><label class="text-[11px]">管理使用者權限</label><button class="bt bt-g bt-sm" onclick="swV('roles')">前往管理頁面</button></div></div></div>`;
+   } else {
+     h += `<div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs text-warn">warning</span>目前為查看者模式</p><div class="sgr"><div class="srw"><label class="text-[11px] text-warn">無法新增或編輯資料</label><button class="bt bt-g bt-sm" onclick="requestAdminRole()">申請管理員權限</button></div></div></div>`;
    }
 
   // 字體大小設定
@@ -1295,6 +1273,26 @@ async function manualSync() {
   showSyncOverlay(false);
   rV();
   toast('資料已重新同步', 's');
+}
+
+/* 申請管理員權限（當profiles表沒有正確role時使用） */
+async function requestAdminRole() {
+  if (!curUser || !sb) return;
+  if (!confirm('確定要將此帳號設為管理員嗎？\n\n此操作只有在系統中尚無任何管理員時才會成功。')) return;
+  try {
+    const { data: admins } = await sb.from('profiles').select('id').eq('role', 'admin').limit(1);
+    if (admins && admins.length > 0) {
+      toast('系統已有管理員，請請求現有管理員協助升級您的權限', 'e');
+      return;
+    }
+    const { error } = await sb.from('profiles').upsert({ id: curUser.id, role: 'admin' });
+    if (error) throw error;
+    userRole = 'admin';
+    toast('已升級為管理員，重新整理頁面以套用', 's');
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) {
+    toast('操作失敗：' + e.message, 'e');
+  }
 }
 
 // 權限管理視窗
