@@ -916,7 +916,7 @@ function sMk() {
     if (i !== -1) makers[i] = { ...makers[i], ...d };
     toast('已更新', 's');
   } else {
-    makers.unshift({ id: gId(), createdAt: new Date().toISOString(), ...d });
+    makers.unshift({ id: gId(), created_at: new Date().toISOString(), ...d });
     toast('已新增', 's');
   }
   sM();
@@ -943,7 +943,7 @@ function sCu() {
     const i = customers.findIndex(c => c.id === id);
     if (i !== -1) customers[i] = { ...customers[i], ...d };
   } else {
-    customers.unshift({ id: gId(), createdAt: new Date().toISOString(), ...d });
+    customers.unshift({ id: gId(), created_at: new Date().toISOString(), ...d });
   }
   sC();
   clM('M0');
@@ -969,7 +969,7 @@ function sAg() {
     const i = agents.findIndex(a => a.id === id);
     if (i !== -1) agents[i] = { ...agents[i], ...d };
   } else {
-    agents.unshift({ id: gId(), createdAt: new Date().toISOString(), ...d });
+    agents.unshift({ id: gId(), created_at: new Date().toISOString(), ...d });
   }
   sA();
   clM('M0');
@@ -982,7 +982,7 @@ function rNk(){return `<div class="afu"><div class="flex flex-wrap items-center 
 function rNkC(list){const g=document.getElementById('nkG');if(!g)return;if(!list.length){g.innerHTML='<div class="text-center py-12"><span class="material-icons-outlined text-3xl text-gold-900 mb-1 block">self_improvement</span><p class="text-[10px] text-gold-700">無匹配</p></div>';return;}g.innerHTML=list.map((m,idx)=>`<div class="bg-ink-300 border border-ink-100 rounded-xl p-3 afu" style="animation-delay:${idx*.03}s"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-gradient-to-br from-gold-600 to-gold-800 flex items-center justify-center flex-shrink-0"><span class="material-icons-outlined text-gold-300 text-sm">self_improvement</span></div><div class="flex-1 min-w-0"><p class="text-xs font-bold">${m.name}${m.phone?` <span class="text-gold-700 font-normal">${m.phone}</span>`:''}</p><p class="text-[9px] text-gold-800">${m.region||'—'} · 認識來源 ${m.channel||'—'}</p><div class="flex flex-wrap gap-2 mt-1"><span class="text-[9px] text-gold-700">加持 ${fM(m.blessingFee||0)}</span><span class="text-[9px] text-gold-700">服務 ${m.serviceRegion||'—'}</span></div>${m.contact?`<p class="text-[9px] text-gold-700 mt-0.5 truncate">${m.contact}</p>`:''}</div><div class="flex gap-1 flex-shrink-0"><button class="bt bt-o bt-sm" onclick="oNk('${m.id}')"><span class="material-icons-outlined" style="font-size:11px">edit</span></button><button class="bt bt-d bt-sm" onclick="dECf('${m.id}','nkG','monks')"><span class="material-icons-outlined" style="font-size:11px">delete</span></button></div></div></div>`).join('');}
 function fNk(){const s=(document.getElementById('nkS')?.value||'').toLowerCase(),rg=document.getElementById('nkR')?.value||'all';let list=monks.filter(m=>{if(rg!=='all'&&m.region!==rg)return false;if(!s)return true;const hay=(m.name+(m.phone||'')+(m.contact||'')+(m.channel||'')+(m.serviceRegion||'')).toLowerCase();return hay.includes(s);});rNkC(list);const ce=document.getElementById('nkC');if(ce)ce.textContent=list.length;}
 function oNk(eid){document.getElementById('M0T').textContent=eid?'編輯僧人':'新增僧人';if(eid){const m=monks.find(x=>x.id===eid);if(!m)return;document.getElementById('M0B').innerHTML=`<input type="hidden" id="nkEid" value="${eid}"><div class="space-y-2.5"><div><label class="fl">地區 *</label><select id="nkRg" class="fi"><option value="">請選擇</option>${REGIONS.map(r=>`<option value="${r}" ${m.region===r?'selected':''}>${r}</option>`).join('')}</select></div><div><label class="fl">名字 *</label><input type="text" id="nkNm" class="fi" value="${m.name}"></div><div><label class="fl">電話</label><input type="tel" id="nkPh" class="fi" value="${m.phone||''}" inputmode="tel"></div><div><label class="fl">聯繫方式</label><textarea id="nkCt" class="fi" rows="2" placeholder="LINE、WhatsApp、Email 等">${m.contact||''}</textarea></div><div><label class="fl">認識來源</label><select id="nkCh" class="fi"><option value="">請選擇</option>${CHAN_OPTS.map(c=>`<option value="${c}" ${m.channel===c?'selected':''}>${c}</option>`).join('')}</select></div><div><label class="fl">加持費用</label><input type="number" id="nkBf" class="fi" value="${m.blessingFee!=null&&m.blessingFee!==''?m.blessingFee:''}" min="0" step="1" inputmode="numeric" placeholder="0"></div><div><label class="fl">服務地區</label><input type="text" id="nkSr" class="fi" value="${m.serviceRegion||''}" placeholder="例：全台可約"></div></div><div class="flex justify-end gap-2 mt-4 pb-2"><button class="bt bt-o" onclick="clM('M0')">取消</button><button class="bt bt-g" onclick="sNk()"><span class="material-icons-outlined text-xs">save</span>儲存</button></div>`;}else{document.getElementById('M0B').innerHTML=`<input type="hidden" id="nkEid" value=""><div class="space-y-2.5"><div><label class="fl">地區 *</label><select id="nkRg" class="fi"><option value="">請選擇</option>${REGIONS.map(r=>`<option value="${r}">${r}</option>`).join('')}</select></div><div><label class="fl">名字 *</label><input type="text" id="nkNm" class="fi" placeholder="法名或稱呼"></div><div><label class="fl">電話</label><input type="tel" id="nkPh" class="fi" inputmode="tel"></div><div><label class="fl">聯繫方式</label><textarea id="nkCt" class="fi" rows="2" placeholder="LINE、WhatsApp、Email 等"></textarea></div><div><label class="fl">認識來源</label><select id="nkCh" class="fi"><option value="">請選擇</option>${CHAN_OPTS.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div><div><label class="fl">加持費用</label><input type="number" id="nkBf" class="fi" value="" min="0" step="1" inputmode="numeric" placeholder="0"></div><div><label class="fl">服務地區</label><input type="text" id="nkSr" class="fi" placeholder="例：全台可約"></div></div><div class="flex justify-end gap-2 mt-4 pb-2"><button class="bt bt-o" onclick="clM('M0')">取消</button><button class="bt bt-g" onclick="sNk()"><span class="material-icons-outlined text-xs">save</span>儲存</button></div>`;}opM('M0');}
-function sNk(){const id=document.getElementById('nkEid').value.trim(),rg=document.getElementById('nkRg').value,nm=document.getElementById('nkNm').value.trim(),ph=document.getElementById('nkPh').value.trim(),ct=document.getElementById('nkCt').value.trim(),ch=document.getElementById('nkCh').value.trim(),bf=parseFloat(document.getElementById('nkBf').value),sr=document.getElementById('nkSr').value.trim();if(!rg){toast('請選地區','e');return;}if(!nm){toast('請輸入名字','e');return;}const d={region:rg,name:nm,phone:ph,contact:ct,channel:ch,blessingFee:isNaN(bf)?0:Math.max(0,bf),serviceRegion:sr};if(id){const i=monks.findIndex(x=>x.id===id);if(i!==-1)monks[i]={...monks[i],...d};}else{monks.unshift({id:gId(),createdAt:new Date().toISOString(),...d});}nkSync();clM('M0');toast(id?'已更新':'已新增','s');rV();}
+function sNk(){const id=document.getElementById('nkEid').value.trim(),rg=document.getElementById('nkRg').value,nm=document.getElementById('nkNm').value.trim(),ph=document.getElementById('nkPh').value.trim(),ct=document.getElementById('nkCt').value.trim(),ch=document.getElementById('nkCh').value.trim(),bf=parseFloat(document.getElementById('nkBf').value),sr=document.getElementById('nkSr').value.trim();if(!rg){toast('請選地區','e');return;}if(!nm){toast('請輸入名字','e');return;}const d={region:rg,name:nm,phone:ph,contact:ct,channel:ch,blessingFee:isNaN(bf)?0:Math.max(0,bf),serviceRegion:sr};if(id){const i=monks.findIndex(x=>x.id===id);if(i!==-1)monks[i]={...monks[i],...d};}else{monks.unshift({id:gId(),created_at:new Date().toISOString(),...d});}nkSync();clM('M0');toast(id?'已更新':'已新增','s');rV();}
 
 /* ===== 庫存管理 ===== */
 function rInv(){return `<div class="afu"><div class="flex flex-wrap items-center gap-1.5 mb-3"><div class="sx flex-1 min-w-[110px]"><span class="material-icons-outlined">search</span><input type="text" id="iS" class="fi" placeholder="搜尋..."></div><select id="iSt" class="fi w-auto text-[10px]"><option value="all">全部</option><option value="in-stock">在庫</option><option value="shipped">已出</option></select><select id="iRg" class="fi w-auto text-[10px]"><option value="all">地區</option>${REGIONS.map(r=>`<option value="${r}">${r}</option>`).join('')}</select><select id="iSo" class="fi w-auto text-[10px]"><option value="newest">最新</option><option value="ph">售價高→低</option></select></div><div class="text-[10px] text-gold-700 mb-2.5">共 <strong class="text-gold-400" id="iC">${items.length}</strong> 張</div><div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2" id="iG"></div></div>`;}
@@ -1048,9 +1048,9 @@ function rSSL(list){const c=document.getElementById('saL');if(!c)return;c.innerH
 function selSI(id){shipSelId=id;const item=items.find(i=>i.id===id);if(!item)return;document.getElementById('saI').classList.remove('hidden');document.getElementById('saN').textContent=`${item.code} · ${item.region} · ${fM(item.price)}`;document.getElementById('saDep').value=0;document.getElementById('saBal').value=0;const q=(document.getElementById('saS')?.value||'').toLowerCase();let list=items.filter(i=>i.status==='in-stock');if(q)list=list.filter(i=>(i.code+i.maker+i.region+(i.painter||'')).toLowerCase().includes(q));rSSL(list);}
 function cfSA(){if(!shipSelId){toast('請選擇唐卡','e');return;}const d=document.getElementById('saD').value;if(!d){toast('請選擇日期','e');return;}const cn=document.getElementById('saCN').value.trim(),cp=document.getElementById('saCP').value.trim(),an=document.getElementById('saAN').value.trim(),ap=document.getElementById('saAP').value.trim(),dep=parseFloat(document.getElementById('saDep').value)||0,bal=parseFloat(document.getElementById('saBal').value)||0,bd=document.getElementById('saBD').value,nt=document.getElementById('saNt').value.trim();
 // 自動建檔：客戶
-if(cn&&cp&&!customers.some(c=>c.phone===cp)){customers.unshift({id:gId(),name:cn,phone:cp,address:'',notes:'出貨自動建檔',createdAt:new Date().toISOString()});sC();}
+if(cn&&cp&&!customers.some(c=>c.phone===cp)){customers.unshift({id:gId(),name:cn,phone:cp,address:'',notes:'出貨自動建檔',created_at:new Date().toISOString()});sC();}
 // 自動建檔：代理
-if(an&&ap&&!agents.some(a=>a.phone===ap)){agents.unshift({id:gId(),name:an,phone:ap,region:'',commission:'',notes:'出貨自動建檔',createdAt:new Date().toISOString()});sA();}
+if(an&&ap&&!agents.some(a=>a.phone===ap)){agents.unshift({id:gId(),name:an,phone:ap,region:'',commission:'',notes:'出貨自動建檔',created_at:new Date().toISOString()});sA();}
 const i=items.findIndex(x=>x.id===shipSelId);if(i!==-1){items[i].shipmentDate=d;items[i].shipNotes=nt;items[i].custName=cn;items[i].custPhone=cp;items[i].agentName=an;items[i].deposit=dep;items[i].balance=bal;items[i].balanceDue=bd;items[i].status='shipped';sI();}clM('M1');let msg='出貨成功';if(cn&&cp&&!customers.some(c=>c.phone===cp))msg+='，客戶已自動建檔';if(an&&ap&&!agents.some(a=>a.phone===ap))msg+='，代理已自動建檔';toast(msg,'s');rV();}
 function cSh(id) {
   const i = items.findIndex(x => x.id === id);
@@ -1497,7 +1497,7 @@ function sIt() {
     id: gId(), code: co, image: curImg, imageHash: curHash, region: rg, painter: pt, maker: mk,
     cost: cs, extraCost: ec, price: pr, taxIncluded: tx, framed: fr, purchaseDate: pd,
     shipmentDate: null, shipNotes: '', status: 'in-stock', notes: nt,
-    custName: '', custPhone: '', agentName: '', deposit: 0, balance: 0, balanceDue: '', createdAt: pd
+    custName: '', custPhone: '', agentName: '', deposit: 0, balance: 0, balanceDue: '', created_at: pd
   });
   S.codeNext = (S.codeNext || 1) + 1;
   sS();
