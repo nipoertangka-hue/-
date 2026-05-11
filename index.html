@@ -160,7 +160,7 @@
   /* ---- 字體大小縮放 ---- */
   #appWrap.sz-s{zoom:.88}
   #appWrap.sz-m{zoom:1}
-  #appWrap.sz-l{zoom:1.15}
+  #appWrap.sz-l{zoom:1.30}
   /* ---- 同步載入遮罩 ---- */
   .sync-overlay{position:fixed;inset:0;background:var(--bg);z-index:1900;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .5s}
   .sync-overlay.done{opacity:0;pointer-events:none}
@@ -204,11 +204,7 @@
         <button id="authSubmit" class="bt bt-g w-full justify-center py-3 text-sm mt-2" onclick="handleAuth()">
           登入系統
         </button>
-        <div class="text-center mt-4">
-          <button class="text-xs text-tm hover:text-gold-500 transition-colors block w-full" onclick="toggleAuthMode()" id="authToggleText">
-            尚未有帳號？點此註冊
-          </button>
-        </div>
+        <!-- 註冊功能已關閉，僅限 Admin 在成員管理中新增帳號 -->
       </div>
     </div>
   </div>
@@ -261,14 +257,12 @@
         <div class="ni" data-v="finance" onclick="swV('finance')"><span class="material-icons-outlined">analytics</span>財務分析</div>
         <div class="ni" data-v="scan" onclick="swV('scan')"><span class="material-icons-outlined">photo_camera</span>掃圖識別</div>
         <div class="ni" data-v="records" onclick="swV('records')"><span class="material-icons-outlined">receipt_long</span>進出記錄</div>
-      </nav>
-      <div class="px-2 py-0.5">
-        <div class="h-px bg-gradient-to-r from-transparent via-gold-800 to-transparent opacity-20"></div>
-      </div>
-      <div class="p-1.5">
+        <div class="px-2 py-1">
+          <div class="h-px bg-gradient-to-r from-transparent via-gold-800 to-transparent opacity-20"></div>
+        </div>
         <div class="ni" data-v="settings" onclick="swV('settings')"><span class="material-icons-outlined">settings</span>系統設置</div>
         <div class="ni text-err" onclick="handleLogout()"><span class="material-icons-outlined">logout</span>登出系統</div>
-      </div>
+      </nav>
     </aside>
     <main class="flex-1 flex flex-col min-w-0">
       <header class="flex items-center justify-between px-3 py-2 border-b border-ink-100 bg-ink-600/80 backdrop-blur-md flex-shrink-0 relative z-40" style="-webkit-backdrop-filter:blur(12px)">
@@ -411,6 +405,9 @@ async function handleLogout() {
 
 async function checkSession() {
   console.log('Checking session...');
+  // 先確保登入畫面顯示，避免閃爍
+  document.getElementById('authScreen').style.display = 'flex';
+  
   try {
     if (!sb) throw new Error('Supabase 未正確初始化');
     const { data, error } = await sb.auth.getSession();
@@ -444,13 +441,17 @@ async function checkSession() {
         else nrm.classList.add('hidden');
       }
 
+      // 有有效 session，隱藏登入畫面
       document.getElementById('authScreen').style.display = 'none';
       await initData();
     } else {
-      document.getElementById('authScreen').style.display = 'flex';
+      // 沒有 session，保持顯示登入畫面
+      console.log('No active session, showing login screen');
     }
   } catch (err) {
     console.error('Session check error:', err);
+    // 發生錯誤時，確保顯示登入畫面
+    document.getElementById('authScreen').style.display = 'flex';
     toast('連線失敗: ' + err.message, 'e');
   }
 }
@@ -1576,12 +1577,14 @@ document.addEventListener('input', function (e) {
 
 function rSSL(list){const c=document.getElementById('saL');if(!c)return;c.innerHTML=list.map(item=>`<div class="ssi ${shipSelId===item.id?'sel':''}" onclick="selSI('${item.id}')"><div class="w-8 h-11 rounded overflow-hidden bg-ink-500 flex-shrink-0">${item.image?`<img src="${item.image}" class="w-full h-full object-cover">`:'<div class="w-full h-full flex items-center justify-center"><span class="material-icons-outlined text-gold-900" style="font-size:12px">image</span></div>'}</div><div class="flex-1 min-w-0"><p class="text-[10px] font-bold">${item.code}</p><p class="text-[9px] text-gold-700">${item.region} · ${item.painter||item.maker}</p><p class="text-[9px] text-gold-400 fs">${fM(item.price)}</p></div>${shipSelId===item.id?'<span class="material-icons-outlined text-gold-400 flex-shrink-0" style="font-size:14px">check_circle</span>':''}</div>`).join('');}
 function selSI(id){shipSelId=id;const item=items.find(i=>i.id===id);if(!item)return;document.getElementById('saI').classList.remove('hidden');document.getElementById('saN').textContent=`${item.code} · ${item.region} · ${fM(item.price)}`;document.getElementById('saDep').value=0;document.getElementById('saBal').value=0;const q=(document.getElementById('saS')?.value||'').toLowerCase();let list=items.filter(i=>i.status==='in-stock');if(q)list=list.filter(i=>(i.code+i.maker+i.region+(i.painter||'')).toLowerCase().includes(q));rSSL(list);}
-function cfSA(){if(!shipSelId){toast('請選擇唐卡','e');return;}const d=document.getElementById('saD').value;if(!d){toast('請選擇日期','e');return;}const cn=document.getElementById('saCN').value.trim(),cp=document.getElementById('saCP').value.trim(),an=document.getElementById('saAN').value.trim(),ap=document.getElementById('saAP').value.trim(),dep=parseFloat(document.getElementById('saDep').value)||0,bal=parseFloat(document.getElementById('saBal').value)||0,bd=document.getElementById('saBD').value,nt=document.getElementById('saNt').value.trim();
+async function cfSA(){if(!shipSelId){toast('請選擇唐卡','e');return;}const d=document.getElementById('saD').value;if(!d){toast('請選擇日期','e');return;}const cn=document.getElementById('saCN').value.trim(),cp=document.getElementById('saCP').value.trim(),an=document.getElementById('saAN').value.trim(),ap=document.getElementById('saAP').value.trim(),dep=parseFloat(document.getElementById('saDep').value)||0,bal=parseFloat(document.getElementById('saBal').value)||0,bd=document.getElementById('saBD').value,nt=document.getElementById('saNt').value.trim();
 // 自動建檔：客戶
-if(cn&&cp&&!customers.some(c=>c.phone===cp)){customers.unshift({id:gId(),name:cn,phone:cp,address:'',notes:'出貨自動建檔',created_at:new Date().toISOString()});sC();}
+let customerAdded = false;
+if(cn&&cp&&!customers.some(c=>c.phone===cp)){customers.unshift({id:gId(),name:cn,phone:cp,address:'',notes:'出貨自動建檔',created_at:new Date().toISOString()});customerAdded = true;await sC();}
 // 自動建檔：代理
-if(an&&ap&&!agents.some(a=>a.phone===ap)){agents.unshift({id:gId(),name:an,phone:ap,region:'',commission:'',notes:'出貨自動建檔',created_at:new Date().toISOString()});sA();}
-const i=items.findIndex(x=>x.id===shipSelId);if(i!==-1){items[i].shipmentDate=d;items[i].shipNotes=nt;items[i].custName=cn;items[i].custPhone=cp;items[i].agentName=an;items[i].deposit=dep;items[i].balance=bal;items[i].balanceDue=bd;items[i].status='shipped';sI();}clM('M1');let msg='出貨成功';if(cn&&cp&&!customers.some(c=>c.phone===cp))msg+='，客戶已自動建檔';if(an&&ap&&!agents.some(a=>a.phone===ap))msg+='，代理已自動建檔';toast(msg,'s');rV();}
+let agentAdded = false;
+if(an&&ap&&!agents.some(a=>a.phone===ap)){agents.unshift({id:gId(),name:an,phone:ap,region:'',commission:'',notes:'出貨自動建檔',created_at:new Date().toISOString()});agentAdded = true;await sA();}
+const i=items.findIndex(x=>x.id===shipSelId);if(i!==-1){items[i].shipmentDate=d;items[i].shipNotes=nt;items[i].custName=cn;items[i].custPhone=cp;items[i].agentName=an;items[i].deposit=dep;items[i].balance=bal;items[i].balanceDue=bd;items[i].status='shipped';await sI();}clM('M1');let msg='出貨成功';if(customerAdded)msg+='，客戶已自動建檔';if(agentAdded)msg+='，代理已自動建檔';toast(msg,'s');rV();}
 function cSh(id) {
   const i = items.findIndex(x => x.id === id);
   if (i !== -1) {
@@ -1740,11 +1743,94 @@ function rRoles() {
         <h3 class="fs text-lg font-bold text-gold-300">成員權限管理</h3>
         <p class="text-xs text-tm">最高權限管理員可以直接在此分配或更改所有註冊成員的權限等級。</p>
       </div>
+      
+      <!-- Admin 新增成員功能 -->
+      <div class="bg-gradient-to-r from-emerald-900/20 to-teal-900/20 border border-emerald-700/30 rounded-xl p-4 mb-6">
+        <h4 class="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-2">
+          <span class="material-icons-outlined text-base">person_add</span>
+          新增系統成員
+        </h4>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <input type="email" id="newMemberEmail" placeholder="Email 帳號" class="inp text-sm" />
+          <input type="password" id="newMemberPassword" placeholder="初始密碼" class="inp text-sm" />
+          <select id="newMemberRole" class="inp text-sm">
+            <option value="viewer">Viewer (唯讀)</option>
+            <option value="editor">Editor (編輯)</option>
+            <option value="admin">Admin (管理員)</option>
+          </select>
+        </div>
+        <button onclick="addNewMember()" class="bt bt-g w-full mt-3 justify-center py-2 text-sm">
+          <span class="material-icons-outlined text-sm mr-1">add</span>
+          建立新帳號
+        </button>
+      </div>
+      
       <div id="rolesList">
         <p class="text-center p-8 text-tm">成員列表載入中...</p>
       </div>
     </div>
   `;
+}
+
+// Admin 新增成員函數
+async function addNewMember() {
+  if (userRole !== 'admin') {
+    toast('權限不足', 'e');
+    return;
+  }
+  
+  const email = document.getElementById('newMemberEmail').value.trim();
+  const password = document.getElementById('newMemberPassword').value;
+  const role = document.getElementById('newMemberRole').value;
+  
+  if (!email || !password) {
+    toast('請填寫 Email 和密碼', 'e');
+    return;
+  }
+  
+  if (password.length < 6) {
+    toast('密碼長度至少需要 6 個字元', 'e');
+    return;
+  }
+  
+  try {
+    // 1. 保存當前 Admin 的 session
+    const { data: currentSession } = await sb.auth.getSession();
+    
+    // 2. 創建新用戶（會自動登入）
+    const { data, error } = await sb.auth.signUp({
+      email: email,
+      password: password
+    });
+    
+    if (error) throw error;
+    
+    // 3. 在 profiles 表中創建對應記錄
+    const { error: profileError } = await sb.from('profiles').insert({
+      id: data.user.id,
+      role: role
+    });
+    
+    if (profileError) throw profileError;
+    
+    toast(`成員 ${email} 已成功建立（${role}）`, 's');
+    
+    // 4. 恢復 Admin session
+    if (currentSession?.session) {
+      await sb.auth.setSession(currentSession.session);
+    }
+    
+    // 清空表單
+    document.getElementById('newMemberEmail').value = '';
+    document.getElementById('newMemberPassword').value = '';
+    
+    // 重新載入成員列表
+    rRoles();
+    
+  } catch (err) {
+    console.error('Create user error:', err);
+    toast('建立失敗: ' + err.message, 'e');
+  }
 }
 
 /* ===== 系統設置 ===== */
