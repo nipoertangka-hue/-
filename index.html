@@ -456,41 +456,16 @@ async function checkSession() {
 }
 
 async function initData() {
-  lD(); // 讀取本地快取（包含本地數據）
-  
-  // 檢查 LocalStorage 是否有本地數據
-  const localItems = JSON.parse(localStorage.getItem(KI) || '[]');
-  const hasLocalData = localItems.length > 0;
+  lD(); // 讀取本地設定（字體大小等）
   
   S = gS();
   applyFontSize(); // 套用上次儲存的字體大小
 
   // 顯示同步遮罩
-  showSyncOverlay(true, '連接 Supabase 資料庫', 10);
+  showSyncOverlay(true, '從 Supabase 載入最新數據', 10);
 
-  // 優先使用本地數據，避免數據遺失
-  if (hasLocalData) {
-    console.log('發現本地數據，優先使用本地數據:', localItems.length, '筆');
-    items = localItems;
-    // 從雲端拉取數據後，合併而不是覆蓋
-    await syncFromCloud();
-    
-    // 將本地數據與雲端數據合併（以 ID 為準）
-    const cloudItems = items;
-    const mergedItems = [...cloudItems];
-    localItems.forEach(localItem => {
-      const exists = mergedItems.find(c => c.id === localItem.id);
-      if (!exists) {
-        mergedItems.push(localItem);
-        console.log('合併本地數據:', localItem.code);
-      }
-    });
-    items = mergedItems;
-    console.log('合併完成，總共:', items.length, '筆');
-  } else {
-    // 沒有本地數據，直接從雲端拉取
-    await syncFromCloud();
-  }
+  // 永遠從 Supabase 載入最新數據（多使用者同步優先）
+  await syncFromCloud();
 
   showSyncOverlay(false);
   document.getElementById('SBT').textContent = S.shopName;
@@ -564,12 +539,9 @@ async function syncFromCloud() {
 }
 
 function saveAllToLocal() {
-  localStorage.setItem(KI, JSON.stringify(items));
-  localStorage.setItem(KM, JSON.stringify(makers));
-  localStorage.setItem(KC, JSON.stringify(customers));
-  localStorage.setItem(KA, JSON.stringify(agents));
-  localStorage.setItem(KN, JSON.stringify(monks));
-  localStorage.setItem(KW, JSON.stringify(warehouses));
+  // 多使用者系統：不保存業務數據到 LocalStorage，避免數據不一致
+  // 只保留設定數據（字體大小等）
+  // items, makers, customers, agents, monks, warehouses 永遠從 Supabase 載入
 }
 
 // 同步至 Supabase - 使用数据库实际字段名（小写无驼峰）
@@ -580,7 +552,9 @@ async function sI() {
     return;
   }
   
-  localStorage.setItem(KI, JSON.stringify(items));
+  // 多使用者系統：不保存到 LocalStorage，直接同步到 Supabase
+  // localStorage.setItem(KI, JSON.stringify(items)); // 已停用
+  
   if (curUser && sb) {
     try {
       // 将前端驼峰字段映射到数据库小写字段
@@ -624,7 +598,7 @@ async function sI() {
 
 async function sM() {
   if (userRole === 'viewer') return;
-  localStorage.setItem(KM, JSON.stringify(makers));
+  // localStorage.setItem(KM, JSON.stringify(makers)); // 已停用
   if (curUser && sb) {
     try {
       const { error } = await sb.from('makers').upsert(makers.map(m => ({...m, user_id: curUser.id})), { onConflict: 'id' });
@@ -638,7 +612,7 @@ async function sM() {
 
 async function sC() {
   if (userRole === 'viewer') return;
-  localStorage.setItem(KC, JSON.stringify(customers));
+  // localStorage.setItem(KC, JSON.stringify(customers)); // 已停用
   if (curUser && sb) {
     try {
       const { error } = await sb.from('customers').upsert(customers.map(c => ({...c, user_id: curUser.id})), { onConflict: 'id' });
@@ -652,7 +626,7 @@ async function sC() {
 
 async function sA() {
   if (userRole === 'viewer') return;
-  localStorage.setItem(KA, JSON.stringify(agents));
+  // localStorage.setItem(KA, JSON.stringify(agents)); // 已停用
   if (curUser && sb) {
     try {
       const { error } = await sb.from('agents').upsert(agents.map(a => ({...a, user_id: curUser.id})), { onConflict: 'id' });
@@ -666,7 +640,7 @@ async function sA() {
 
 async function nkSync() {
   if (userRole === 'viewer') return;
-  localStorage.setItem(KN, JSON.stringify(monks));
+  // localStorage.setItem(KN, JSON.stringify(monks)); // 已停用
   if (curUser && sb) {
     try {
       const { error } = await sb.from('monks').upsert(monks.map(n => ({...n, user_id: curUser.id})), { onConflict: 'id' });
@@ -681,7 +655,7 @@ async function nkSync() {
 // 倉庫同步函數
 async function wSync() {
   if (userRole === 'viewer') return;
-  localStorage.setItem(KW, JSON.stringify(warehouses));
+  // localStorage.setItem(KW, JSON.stringify(warehouses)); // 已停用
   if (curUser && sb) {
     try {
       const { error } = await sb.from('warehouses').upsert(warehouses.map(w => ({...w, user_id: curUser.id})), { onConflict: 'id' });
