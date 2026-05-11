@@ -1483,7 +1483,30 @@ function fInv() {
     return true;
   });
   if (so === 'ph') f.sort((a, b) => b.price - a.price);
-  else if (so === 'code') f.sort((a, b) => a.code.localeCompare(b.code));
+  else if (so === 'code') {
+    // 自然排序：將編號拆分為字串和數字部分分別比較
+    f.sort((a, b) => {
+      const aCode = a.code || '';
+      const bCode = b.code || '';
+      
+      // 嘗試提取數字部分進行比較
+      const aNumMatch = aCode.match(/(\d+)$/);
+      const bNumMatch = bCode.match(/(\d+)$/);
+      
+      if (aNumMatch && bNumMatch) {
+        // 都有數字：先比較前綴，再比較數字
+        const aPrefix = aCode.substring(0, aCode.length - aNumMatch[0].length);
+        const bPrefix = bCode.substring(0, bCode.length - bNumMatch[0].length);
+        const prefixCompare = aPrefix.localeCompare(bPrefix);
+        if (prefixCompare !== 0) return prefixCompare;
+        // 前綴相同，比較數字（轉為數值）
+        return parseInt(aNumMatch[1], 10) - parseInt(bNumMatch[1], 10);
+      }
+      
+      // 至少一個沒有數字：使用 localeCompare 的自然排序選項
+      return aCode.localeCompare(bCode, 'zh-TW', { numeric: true, sensitivity: 'base' });
+    });
+  }
   else f.sort((a, b) => new Date(b.purchaseDate) - new Date(a.purchaseDate));
   rIC(f);
   const c = document.getElementById('iC');
