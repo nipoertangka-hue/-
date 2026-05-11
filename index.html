@@ -251,6 +251,7 @@
       <nav class="flex-1 py-0.5 overflow-y-auto" id="NM">
         <div class="ni act" data-v="dashboard" onclick="swV('dashboard')"><span class="material-icons-outlined">dashboard</span>儀表板</div>
         <div id="navRoleMgmt" class="ni hidden" data-v="roles" onclick="swV('roles')"><span class="material-icons-outlined text-warn">admin_panel_settings</span>權限管理</div>
+        <div class="ni" data-v="warehouses" onclick="swV('warehouses')"><span class="material-icons-outlined">warehouse</span>倉庫管理</div>
         <div class="ni" data-v="makers" onclick="swV('makers')"><span class="material-icons-outlined">store</span>廠商管理</div>
         <div class="ni" data-v="customers" onclick="swV('customers')"><span class="material-icons-outlined">people</span>客戶名單</div>
         <div class="ni" data-v="agents" onclick="swV('agents')"><span class="material-icons-outlined">supervised_user_circle</span>代理管理</div>
@@ -332,11 +333,11 @@
 
 <script>
 /* ===== 常量和变量声明（必须放在最前面） ===== */
-const KI='tk_items',KM='tk_makers',KC='tk_customers',KA='tk_agents',KN='tk_monks',KS='tk_settings';
+const KI='tk_items',KM='tk_makers',KC='tk_customers',KA='tk_agents',KN='tk_monks',KS='tk_settings',KW='tk_warehouses';
 const PAY_OPTS=['現金匯款','微信支付','刷卡支付','找人代付','支付寶支付'];
 const REGIONS=['西藏','尼泊爾','不丹','拉達克','蒙古','內地','其他'];
 const CHAN_OPTS=['展會認識','網路搜尋','朋友介紹','主動開發','社群媒體','廠商自薦','其他'];
-let items=[],makers=[],customers=[],agents=[],monks=[],S={},curImg='',curHash='',shipSelId='';
+let items=[],makers=[],customers=[],agents=[],monks=[],warehouses=[],S={},curImg='',curHash='',shipSelId='';
 
 /* ===== Supabase Auth & Sync ===== */
 window.sb = null;
@@ -508,14 +509,15 @@ async function syncFromCloud() {
   if (!curUser || !sb) return;
   try {
     const steps = [
-      { label: '同步唐卡庫存...', key: 'items',     table: 'items',     pct: 20 },
-      { label: '同步廠商資料...', key: 'makers',    table: 'makers',    pct: 40 },
-      { label: '同步客戶名單...', key: 'customers', table: 'customers', pct: 60 },
-      { label: '同步代理資料...', key: 'agents',    table: 'agents',    pct: 75 },
-      { label: '同步僧人資料...', key: 'monks',     table: 'monks',     pct: 90 },
+      { label: '同步唐卡庫存...', key: 'items',     table: 'items',     pct: 15 },
+      { label: '同步廠商資料...', key: 'makers',    table: 'makers',    pct: 30 },
+      { label: '同步客戶名單...', key: 'customers', table: 'customers', pct: 45 },
+      { label: '同步代理資料...', key: 'agents',    table: 'agents',    pct: 60 },
+      { label: '同步僧人資料...', key: 'monks',     table: 'monks',     pct: 75 },
+      { label: '同步倉庫資料...', key: 'warehouses',table: 'warehouses',pct: 90 },
     ];
-    const refs = { items, makers, customers, agents, monks };
-    const setters = { items: v=>items=v, makers: v=>makers=v, customers: v=>customers=v, agents: v=>agents=v, monks: v=>monks=v };
+    const refs = { items, makers, customers, agents, monks, warehouses };
+    const setters = { items: v=>items=v, makers: v=>makers=v, customers: v=>customers=v, agents: v=>agents=v, monks: v=>monks=v, warehouses: v=>warehouses=v };
 
     for (const step of steps) {
       const stepEl = document.getElementById('syncStep');
@@ -547,6 +549,7 @@ function saveAllToLocal() {
   localStorage.setItem(KC, JSON.stringify(customers));
   localStorage.setItem(KA, JSON.stringify(agents));
   localStorage.setItem(KN, JSON.stringify(monks));
+  localStorage.setItem(KW, JSON.stringify(warehouses));
 }
 
 // 同步至 Supabase - 使用数据库实际字段名（小写无驼峰）
@@ -587,7 +590,8 @@ async function sI() {
         balancedue: i.balanceDue || null,
         createdat: i.created_at || new Date().toISOString(),
         created_at: i.created_at,
-        user_id: curUser.id
+        user_id: curUser.id,
+        warehouse: i.warehouse || ''  // 倉庫ID
       }));
       const { error } = await sb.from('items').upsert(itemsToSync, { onConflict: 'id' });
       if (error) throw error;
@@ -654,6 +658,21 @@ async function nkSync() {
   }
 }
 
+// 倉庫同步函數
+async function wSync() {
+  if (userRole === 'viewer') return;
+  localStorage.setItem(KW, JSON.stringify(warehouses));
+  if (curUser && sb) {
+    try {
+      const { error } = await sb.from('warehouses').upsert(warehouses.map(w => ({...w, user_id: curUser.id})), { onConflict: 'id' });
+      if (error) throw error;
+    } catch (e) { 
+      console.error('wSync error:', e); 
+      toast('倉庫同步失敗: ' + e.message, 'e');
+    }
+  }
+}
+
 /* ===== PWA ===== */
 const MN = {
   name: '唐卡進銷存管理',
@@ -716,6 +735,7 @@ function lD() {
   try { customers = JSON.parse(localStorage.getItem(KC)) || []; } catch (e) { customers = []; }
   try { agents = JSON.parse(localStorage.getItem(KA)) || []; } catch (e) { agents = []; }
   try { monks = JSON.parse(localStorage.getItem(KN)) || []; } catch (e) { monks = []; }
+  try { warehouses = JSON.parse(localStorage.getItem(KW)) || []; } catch (e) { warehouses = []; }
   S = gS();
 }
 // 刪除重複的 sI(), sM(), sC(), sA(), nkSync() 定義
@@ -1004,6 +1024,7 @@ let cV='dashboard';
 const VT = {
   dashboard: '儀表板',
   roles: '權限管理',
+  warehouses: '倉庫管理',
   makers: '廠商管理',
   customers: '客戶名單',
   agents: '代理管理',
@@ -1055,6 +1076,7 @@ function rV() {
   switch (cV) {
     case 'dashboard': c.innerHTML = rDash(); break;
     case 'roles': c.innerHTML = rRoles(); break;
+    case 'warehouses': c.innerHTML = rWh(); break;
     case 'makers': c.innerHTML = rMk(); break;
     case 'customers': c.innerHTML = rCu(); break;
     case 'agents': c.innerHTML = rAg(); break;
@@ -1092,6 +1114,191 @@ function rDash(){
         <div class="bg-ink-300 border border-ink-100 rounded-xl p-3"><h3 class="fs font-bold text-[11px] mb-2 flex items-center gap-1"><span class="material-icons-outlined text-gold-600 text-xs">public</span>地區分布</h3><div class="space-y-1.5">${Object.entries(rm).sort((a,b)=>b[1]-a[1]).map(([r,c])=>{const p=items.length>0?(c/items.length*100):0;return `<div><div class="flex justify-between text-[10px] mb-0.5"><span class="text-gold-300">${r}</span><span class="text-gold-700">${c}張 ${p.toFixed(0)}%</span></div><div class="h-1 bg-ink-600 rounded-full overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-gold-700 to-gold-400" style="width:${p}%"></div></div></div>`;}).join('')}</div></div>
         <div class="bg-ink-300 border border-ink-100 rounded-xl p-3"><h3 class="fs font-bold text-[11px] mb-2 flex items-center gap-1"><span class="material-icons-outlined text-gold-600 text-xs">schedule</span>最近動態</h3><div>${items.slice(0,5).map((item,idx)=>`<div class="flex items-center gap-2 py-1.5 ${idx<4?'border-b border-ink-100':''}"><div class="w-6 h-6 rounded ${item.status==='in-stock'?'bg-green-900/30':'bg-gold-900/30'} flex items-center justify-center flex-shrink-0"><span class="material-icons-outlined text-[9px] ${item.status==='in-stock'?'text-green-500':'text-gold-500'}">${item.status==='in-stock'?'check_circle':'local_shipping'}</span></div><div class="flex-1 min-w-0"><p class="text-[10px] font-medium truncate">${item.code}</p><p class="text-[8px] text-gold-800 truncate">${item.painter||item.maker}</p></div><p class="text-[10px] fs font-bold text-gold-400 flex-shrink-0">${fM(item.price)}</p></div>`).join('')}</div></div>
     </div></div>`;
+}
+
+/* ===== 倉庫管理 ===== */
+function rWh(){
+  return `<div class="afu">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="fs text-base font-bold">倉庫管理</h3>
+      ${userRole !== 'viewer' ? `<button class="bt bt-g bt-sm" onclick="oWM()"><span class="material-icons-outlined text-xs">add</span>新增倉庫</button>` : ''}
+    </div>
+    <p class="text-[10px] text-gold-700 mb-3">共 <strong class="text-gold-400">${warehouses.length}</strong> 個倉庫</p>
+    <div id="whG" class="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+      ${warehouses.map(w => {
+        const itemCount = items.filter(i => i.warehouse === w.id).length;
+        const totalCost = items.filter(i => i.warehouse === w.id).reduce((sum, i) => sum + i.cost + (i.extraCost || 0), 0);
+        return `
+          <div class="sc p-4 afu">
+            <div class="flex items-start justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center">
+                  <span class="material-icons-outlined text-ink-900">warehouse</span>
+                </div>
+                <div>
+                  <p class="text-sm font-bold">${w.name}</p>
+                  <p class="text-[9px] text-gold-700">${itemCount} 張唐卡</p>
+                </div>
+              </div>
+              ${userRole !== 'viewer' ? `
+                <div class="flex gap-1">
+                  <button class="w-7 h-7 rounded-lg border border-ink-100 flex items-center justify-center text-gold-600 hover:bg-ink-100 transition-colors" onclick="eWM('${w.id}')">
+                    <span class="material-icons-outlined text-xs">edit</span>
+                  </button>
+                  <button class="w-7 h-7 rounded-lg border border-ink-100 flex items-center justify-center text-err hover:bg-ink-100 transition-colors" onclick="dWCf('${w.id}')">
+                    <span class="material-icons-outlined text-xs">delete</span>
+                  </button>
+                </div>
+              ` : ''}
+            </div>
+            <div class="space-y-2">
+              <div class="flex justify-between text-[10px]">
+                <span class="text-gold-800">庫存成本</span>
+                <span class="font-bold text-gold-400">${fM(totalCost)}</span>
+              </div>
+              ${w.notes ? `<p class="text-[9px] text-gold-700 pt-2 border-t border-ink-100">${w.notes}</p>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    ${warehouses.length === 0 ? '<p class="text-center py-12 text-gold-700">尚無倉庫，請點擊右上角新增</p>' : ''}
+  </div>`;
+}
+
+// 打開新增倉庫視窗
+function oWM() {
+  if (userRole === 'viewer') return toast('查看者模式，無法新增', 'e');
+  opM('M0');
+  document.getElementById('M0T').textContent = '新增倉庫';
+  document.getElementById('M0B').innerHTML = `
+    <div class="space-y-3">
+      <div>
+        <label class="text-[10px] text-gold-700 mb-1 block">倉庫名稱 *</label>
+        <input type="text" id="wName" class="fi" placeholder="例如：台北倉庫、上海倉庫...">
+      </div>
+      <div>
+        <label class="text-[10px] text-gold-700 mb-1 block">備註</label>
+        <textarea id="wNotes" class="fi" rows="3" placeholder="選填，倉庫說明..."></textarea>
+      </div>
+      <div class="flex gap-2 justify-end pt-2">
+        <button class="bt bt-o bt-sm" onclick="clM('M0')">取消</button>
+        <button class="bt bt-g bt-sm" onclick="sWM()">儲存</button>
+      </div>
+    </div>
+  `;
+}
+
+// 儲存倉庫
+async function sWM() {
+  const name = document.getElementById('wName').value.trim();
+  const notes = document.getElementById('wNotes').value.trim();
+  
+  if (!name) return toast('請輸入倉庫名稱', 'e');
+  
+  const newWarehouse = {
+    id: gId(),
+    name,
+    notes,
+    created_at: new Date().toISOString()
+  };
+  
+  warehouses.push(newWarehouse);
+  await wSync();
+  clM('M0');
+  toast('倉庫新增成功', 's');
+  rV();
+}
+
+// 編輯倉庫
+function eWM(id) {
+  if (userRole === 'viewer') return toast('查看者模式，無法編輯', 'e');
+  const w = warehouses.find(x => x.id === id);
+  if (!w) return;
+  
+  opM('M0');
+  document.getElementById('M0T').textContent = '編輯倉庫';
+  document.getElementById('M0B').innerHTML = `
+    <div class="space-y-3">
+      <div>
+        <label class="text-[10px] text-gold-700 mb-1 block">倉庫名稱 *</label>
+        <input type="text" id="wName" class="fi" value="${w.name}">
+      </div>
+      <div>
+        <label class="text-[10px] text-gold-700 mb-1 block">備註</label>
+        <textarea id="wNotes" class="fi" rows="3">${w.notes || ''}</textarea>
+      </div>
+      <div class="flex gap-2 justify-end pt-2">
+        <button class="bt bt-o bt-sm" onclick="clM('M0')">取消</button>
+        <button class="bt bt-g bt-sm" onclick="uWM('${id}')">更新</button>
+      </div>
+    </div>
+  `;
+}
+
+// 更新倉庫
+async function uWM(id) {
+  const name = document.getElementById('wName').value.trim();
+  const notes = document.getElementById('wNotes').value.trim();
+  
+  if (!name) return toast('請輸入倉庫名稱', 'e');
+  
+  const w = warehouses.find(x => x.id === id);
+  if (w) {
+    w.name = name;
+    w.notes = notes;
+    await wSync();
+    clM('M0');
+    toast('倉庫更新成功', 's');
+    rV();
+  }
+}
+
+// 刪除倉庫確認
+function dWCf(id) {
+  if (userRole === 'viewer') return toast('查看者模式，無法刪除', 'e');
+  const w = warehouses.find(x => x.id === id);
+  if (!w) return;
+  
+  const itemCount = items.filter(i => i.warehouse === id).length;
+  
+  opM('M0');
+  document.getElementById('M0T').textContent = '確認刪除';
+  document.getElementById('M0B').innerHTML = `
+    <div class="text-center">
+      <div class="w-16 h-16 mx-auto mb-3 rounded-full bg-red-950/50 flex items-center justify-center">
+        <span class="material-icons-outlined text-err text-3xl">warning</span>
+      </div>
+      <p class="text-sm font-bold mb-2">確定要刪除「${w.name}」嗎？</p>
+      ${itemCount > 0 ? `<p class="text-[10px] text-warn mb-3">此倉庫還有 ${itemCount} 張唐卡，刪除後這些唐卡將變更為未指定倉庫</p>` : ''}
+      <p class="text-[10px] text-gold-700 mb-4">此操作無法復原</p>
+      <div class="flex gap-2 justify-center">
+        <button class="bt bt-o bt-sm" onclick="clM('M0')">取消</button>
+        <button class="bt bt-d bt-sm" onclick="dWExec('${id}')">確認刪除</button>
+      </div>
+    </div>
+  `;
+}
+
+// 執行刪除倉庫
+async function dWExec(id) {
+  // 將該倉庫的唐卡變更為未指定倉庫
+  items.forEach(i => {
+    if (i.warehouse === id) {
+      i.warehouse = '';
+    }
+  });
+  
+  warehouses = warehouses.filter(w => w.id !== id);
+  
+  await Promise.all([
+    wSync(),
+    sI()
+  ]);
+  
+  clM('M0');
+  toast('倉庫已刪除', 'i');
+  rV();
 }
 
 /* ===== 廠商管理 ===== */
@@ -1225,7 +1432,7 @@ function oNk(eid){document.getElementById('M0T').textContent=eid?'編輯僧人':
 function sNk(){const id=document.getElementById('nkEid').value.trim(),rg=document.getElementById('nkRg').value,nm=document.getElementById('nkNm').value.trim(),ph=document.getElementById('nkPh').value.trim(),ct=document.getElementById('nkCt').value.trim(),ch=document.getElementById('nkCh').value.trim(),bf=parseFloat(document.getElementById('nkBf').value),sr=document.getElementById('nkSr').value.trim();if(!rg){toast('請選地區','e');return;}if(!nm){toast('請輸入名字','e');return;}const d={region:rg,name:nm,phone:ph,contact:ct,channel:ch,blessingFee:isNaN(bf)?0:Math.max(0,bf),serviceRegion:sr};if(id){const i=monks.findIndex(x=>x.id===id);if(i!==-1)monks[i]={...monks[i],...d};}else{monks.unshift({id:gId(),created_at:new Date().toISOString(),...d});}nkSync();clM('M0');toast(id?'已更新':'已新增','s');rV();}
 
 /* ===== 庫存管理 ===== */
-function rInv(){return `<div class="afu"><div class="flex flex-wrap items-center gap-1.5 mb-3"><div class="sx flex-1 min-w-[110px]"><span class="material-icons-outlined">search</span><input type="text" id="iS" class="fi" placeholder="搜尋..."></div><select id="iSt" class="fi w-auto text-[10px]"><option value="all">全部</option><option value="in-stock">在庫</option><option value="shipped">已出</option></select><select id="iRg" class="fi w-auto text-[10px]"><option value="all">地區</option>${REGIONS.map(r=>`<option value="${r}">${r}</option>`).join('')}</select><select id="iSo" class="fi w-auto text-[10px]"><option value="newest">最新</option><option value="ph">售價高→低</option></select></div><div class="text-[10px] text-gold-700 mb-2.5">共 <strong class="text-gold-400" id="iC">${items.length}</strong> 張</div><div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2" id="iG"></div></div>`;}
+function rInv(){return `<div class="afu"><div class="flex flex-wrap items-center gap-1.5 mb-3"><div class="sx flex-1 min-w-[110px]"><span class="material-icons-outlined">search</span><input type="text" id="iS" class="fi" placeholder="搜尋..."></div><select id="iSt" class="fi w-auto text-[10px]"><option value="all">全部</option><option value="in-stock">在庫</option><option value="shipped">已出</option></select><select id="iRg" class="fi w-auto text-[10px]"><option value="all">地區</option>${REGIONS.map(r=>`<option value="${r}">${r}</option>`).join('')}</select><select id="iWh" class="fi w-auto text-[10px]"><option value="all">全部倉庫</option>${warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}</select><select id="iSo" class="fi w-auto text-[10px]"><option value="newest">最新</option><option value="ph">售價高→低</option></select></div><div class="text-[10px] text-gold-700 mb-2.5">共 <strong class="text-gold-400" id="iC">${items.length}</strong> 張</div><div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2" id="iG"></div></div>`;}
 function rIC(f){const g=document.getElementById('iG');if(!g)return;if(!f.length){g.innerHTML='<div class="col-span-full text-center py-12"><span class="material-icons-outlined text-3xl text-gold-900 mb-1 block">inbox</span><p class="text-[10px] text-gold-700">無匹配</p></div>';return;}
 const ad=S.alertDays||180;
 g.innerHTML=f.map((item,idx)=>{const slow=item.status==='in-stock'&&daysSince(item.purchaseDate)>ad;return `<div class="ic afu" style="animation-delay:${idx*.02}s" onclick="sDt('${item.id}')"><div class="relative overflow-hidden bg-ink-600">${item.image?`<img src="${item.image}" loading="lazy">`:`<div class="w-full aspect-[3/4] flex flex-col items-center justify-center bg-gradient-to-b from-ink-300 to-ink-500"><span class="material-icons-outlined text-2xl text-gold-900 mb-0.5">image</span><span class="text-[9px] text-gold-900">未上傳</span></div>`}<div class="absolute top-1 right-1 flex gap-0.5"><span class="bg ${item.status==='in-stock'?'bg-s':'bg-h'} text-[8px]">${item.status==='in-stock'?'在庫':'已出'}</span>${slow?'<span class="bg bg-w text-[8px]">滯銷</span>':''}</div></div><div class="p-1.5"><p class="text-[10px] font-bold truncate mb-0.5">${item.code}</p><p class="text-[8px] text-gold-700 mb-1 truncate">${item.region} · ${(item.painter||item.maker||'').length>5?(item.painter||item.maker).substr(0,5)+'…':item.painter||item.maker}</p><div class="flex items-end justify-between"><div><p class="text-[7px] text-gold-800">售價</p><p class="fs font-bold text-gold-400 text-[11px]">${fM(item.price)}</p></div><div class="text-right"><p class="text-[7px] text-gold-800">成本</p><p class="text-[9px] text-gold-700">${fM(item.cost)}</p></div></div></div></div>`;}).join('');}
@@ -1233,10 +1440,12 @@ function fInv() {
   const s = (document.getElementById('iS')?.value || '').toLowerCase(),
     st = document.getElementById('iSt')?.value || 'all',
     rg = document.getElementById('iRg')?.value || 'all',
+    wh = document.getElementById('iWh')?.value || 'all',
     so = document.getElementById('iSo')?.value || 'newest';
   let f = items.filter(i => {
     if (st !== 'all' && i.status !== st) return false;
     if (rg !== 'all' && i.region !== rg) return false;
+    if (wh !== 'all' && i.warehouse !== wh) return false;
     if (s && !(i.code.toLowerCase().includes(s) || (i.maker || '').toLowerCase().includes(s) || (i.painter || '').toLowerCase().includes(s) || i.region.includes(s))) return false;
     return true;
   });
@@ -1738,7 +1947,8 @@ function sIt() {
     id: gId(), code: co, image: curImg, imageHash: curHash, region: rg, painter: pt, maker: mk,
     cost: cs, extraCost: ec, price: pr, taxIncluded: tx, framed: fr, purchaseDate: pd,
     shipmentDate: null, shipNotes: '', status: 'in-stock', notes: nt,
-    custName: '', custPhone: '', agentName: '', deposit: 0, balance: 0, balanceDue: '', created_at: pd
+    custName: '', custPhone: '', agentName: '', deposit: 0, balance: 0, balanceDue: '', created_at: pd,
+    warehouse: ''  // 默認為未指定倉庫
   });
   S.codeNext = (S.codeNext || 1) + 1;
   sS();
