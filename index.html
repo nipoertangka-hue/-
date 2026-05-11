@@ -456,21 +456,41 @@ async function checkSession() {
 }
 
 async function initData() {
-  // 清除 localStorage 中的舊資料（避免預設假資料干擾）
-  localStorage.removeItem(KI);
-  localStorage.removeItem(KM);
-  localStorage.removeItem(KC);
-  localStorage.removeItem(KA);
-  localStorage.removeItem(KN);
+  lD(); // 讀取本地快取（包含本地數據）
   
-  lD(); // 讀取本地快取設定（現在是空的）
+  // 檢查 LocalStorage 是否有本地數據
+  const localItems = JSON.parse(localStorage.getItem(KI) || '[]');
+  const hasLocalData = localItems.length > 0;
+  
   S = gS();
   applyFontSize(); // 套用上次儲存的字體大小
 
   // 顯示同步遮罩
   showSyncOverlay(true, '連接 Supabase 資料庫', 10);
 
-  await syncFromCloud(); // 唯一資料來源：Supabase
+  // 優先使用本地數據，避免數據遺失
+  if (hasLocalData) {
+    console.log('發現本地數據，優先使用本地數據:', localItems.length, '筆');
+    items = localItems;
+    // 從雲端拉取數據後，合併而不是覆蓋
+    await syncFromCloud();
+    
+    // 將本地數據與雲端數據合併（以 ID 為準）
+    const cloudItems = items;
+    const mergedItems = [...cloudItems];
+    localItems.forEach(localItem => {
+      const exists = mergedItems.find(c => c.id === localItem.id);
+      if (!exists) {
+        mergedItems.push(localItem);
+        console.log('合併本地數據:', localItem.code);
+      }
+    });
+    items = mergedItems;
+    console.log('合併完成，總共:', items.length, '筆');
+  } else {
+    // 沒有本地數據，直接從雲端拉取
+    await syncFromCloud();
+  }
 
   showSyncOverlay(false);
   document.getElementById('SBT').textContent = S.shopName;
@@ -544,10 +564,7 @@ async function syncFromCloud() {
 }
 
 function saveAllToLocal() {
-  // 不保存圖片 Base64 數據到 LocalStorage，避免超過 5MB 限制
-  // 圖片會從 Supabase Storage 加載
-  const itemsWithoutImages = items.map(i => ({...i, image: ''}));
-  localStorage.setItem(KI, JSON.stringify(itemsWithoutImages));
+  localStorage.setItem(KI, JSON.stringify(items));
   localStorage.setItem(KM, JSON.stringify(makers));
   localStorage.setItem(KC, JSON.stringify(customers));
   localStorage.setItem(KA, JSON.stringify(agents));
@@ -563,9 +580,7 @@ async function sI() {
     return;
   }
   
-  // 不保存圖片 Base64 數據到 LocalStorage，避免超過 5MB 限制
-  const itemsWithoutImages = items.map(i => ({...i, image: ''}));
-  localStorage.setItem(KI, JSON.stringify(itemsWithoutImages));
+  localStorage.setItem(KI, JSON.stringify(items));
   if (curUser && sb) {
     try {
       // 将前端驼峰字段映射到数据库小写字段
