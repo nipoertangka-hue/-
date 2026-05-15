@@ -786,6 +786,166 @@ function gCode() {
 function fM(n) {
   return S.currency + Number(n).toLocaleString('zh-TW');
 }
+function highlightText(text, keyword) {
+  if (!keyword || !text) return text;
+  const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return text.replace(regex, '<mark class="bg-yellow-300/30 text-yellow-200 px-0.5 rounded">$1</mark>');
+}
+function showProductDesc(itemId) {
+  const item = items.find(i => i.id === itemId);
+  if (!item) return;
+  
+  const title = item.productName || item.code;
+  const desc = item.productDescription || '無詳細描述';
+  
+  // 創建臨時 modal
+  const modal = document.createElement('div');
+  modal.className = 'mo';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="mb max-w-md">
+      <div class="p-3 border-b border-ink-100 flex items-center justify-between">
+        <h3 class="fs text-sm font-bold flex items-center gap-2">
+          <span class="material-icons-outlined text-gold-500">label</span>
+          ${title}
+        </h3>
+        <button class="w-7 h-7 rounded-lg flex items-center justify-center text-gold-700" onclick="this.closest('.mo').remove()">
+          <span class="material-icons-outlined text-sm">close</span>
+        </button>
+      </div>
+      <div class="p-4">
+        <div class="bg-ink-600 rounded-lg p-3">
+          <p class="text-[10px] text-gold-700 mb-2 font-semibold">商品描述</p>
+          <p class="text-xs text-gold-300 whitespace-pre-wrap leading-relaxed">${desc}</p>
+        </div>
+        ${item.image ? `<div class="mt-3 rounded-lg overflow-hidden"><img src="${item.image}" class="w-full max-h-60 object-contain bg-ink-600"></div>` : ''}
+        <div class="mt-3 grid grid-cols-2 gap-2 text-[10px]">
+          <div class="bg-ink-600 rounded p-2">
+            <p class="text-gold-700">編號</p>
+            <p class="text-gold-300 font-semibold">${item.code}</p>
+          </div>
+          <div class="bg-ink-600 rounded p-2">
+            <p class="text-gold-700">地區</p>
+            <p class="text-gold-300 font-semibold">${item.region}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // 點擊背景關閉
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+  });
+}
+async function openBatchEdit() {
+  if (userRole === 'viewer') {
+    toast('權限不足', 'e');
+    return;
+  }
+  
+  const inStockItems = items.filter(i => i.status === 'in-stock');
+  if (inStockItems.length === 0) {
+    toast('沒有在庫唐卡可批量編輯', 'w');
+    return;
+  }
+  
+  // 創建批量編輯 modal
+  const modal = document.createElement('div');
+  modal.className = 'mo';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="mb max-w-2xl max-h-[80vh] overflow-y-auto">
+      <div class="p-3 border-b border-ink-100 flex items-center justify-between sticky top-0 bg-ink-200">
+        <h3 class="fs text-sm font-bold flex items-center gap-2">
+          <span class="material-icons-outlined text-gold-500">edit_note</span>
+          批量編輯產品資訊
+        </h3>
+        <button class="w-7 h-7 rounded-lg flex items-center justify-center text-gold-700" onclick="this.closest('.mo').remove()">
+          <span class="material-icons-outlined text-sm">close</span>
+        </button>
+      </div>
+      <div class="p-4">
+        <div class="bg-yellow-900/20 border border-yellow-700/30 rounded-lg p-3 mb-4">
+          <p class="text-[10px] text-yellow-400 flex items-start gap-2">
+            <span class="material-icons-outlined" style="font-size:14px">info</span>
+            <span>選擇要編輯的唐卡，可以批量修改產品名稱和商品描述。留空表示不修改該欄位。</span>
+          </p>
+        </div>
+        <div class="space-y-3 max-h-[50vh] overflow-y-auto" id="batchEditList">
+          ${inStockItems.map(item => `
+            <div class="bg-ink-600 rounded-lg p-3">
+              <div class="flex items-center gap-2 mb-2">
+                <input type="checkbox" id="batch_${item.id}" class="rounded" checked>
+                <label for="batch_${item.id}" class="text-xs font-semibold flex-1 cursor-pointer">${item.code} - ${item.maker}</label>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-[9px] text-gold-700 mb-1 block">產品名稱</label>
+                  <input type="text" id="batch_pn_${item.id}" class="fi text-[10px] py-1" placeholder="${item.productName || '目前空白'}" value="${item.productName || ''}">
+                </div>
+                <div>
+                  <label class="text-[9px] text-gold-700 mb-1 block">商品描述</label>
+                  <input type="text" id="batch_pd_${item.id}" class="fi text-[10px] py-1" placeholder="${item.productDescription ? '已有描述' : '目前空白'}" value="${item.productDescription || ''}">
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="flex gap-2 mt-4 pt-3 border-t border-ink-100">
+          <button class="bt bt-o flex-1" onclick="this.closest('.mo').remove()">取消</button>
+          <button class="bt bt-g flex-1" onclick="executeBatchEdit()">
+            <span class="material-icons-outlined text-xs mr-1">save</span>
+            儲存變更
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // 點擊背景關閉
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+  });
+}
+async function executeBatchEdit() {
+  const inStockItems = items.filter(i => i.status === 'in-stock');
+  let updatedCount = 0;
+  
+  inStockItems.forEach(item => {
+    const checkbox = document.getElementById(`batch_${item.id}`);
+    if (!checkbox || !checkbox.checked) return;
+    
+    const pnInput = document.getElementById(`batch_pn_${item.id}`);
+    const pdInput = document.getElementById(`batch_pd_${item.id}`);
+    
+    if (!pnInput || !pdInput) return;
+    
+    const newPN = pnInput.value.trim();
+    const newPD = pdInput.value.trim();
+    
+    // 只有當值改變時才更新
+    if (newPN !== item.productName || newPD !== item.productDescription) {
+      item.productName = newPN;
+      item.productDescription = newPD;
+      updatedCount++;
+    }
+  });
+  
+  if (updatedCount > 0) {
+    sS();
+    await sI();
+    toast(`已更新 ${updatedCount} 筆資料`, 's');
+    document.querySelector('.mo')?.remove();
+    rV();
+  } else {
+    toast('沒有變更', 'i');
+  }
+}
 function daysSince(d) {
   return Math.floor((Date.now() - new Date(d).getTime()) / 864e5);
 }
@@ -1494,21 +1654,26 @@ function oNk(eid){document.getElementById('M0T').textContent=eid?'編輯僧人':
 function sNk(){const id=document.getElementById('nkEid').value.trim(),rg=document.getElementById('nkRg').value,nm=document.getElementById('nkNm').value.trim(),ph=document.getElementById('nkPh').value.trim(),ct=document.getElementById('nkCt').value.trim(),ch=document.getElementById('nkCh').value.trim(),bf=parseFloat(document.getElementById('nkBf').value),sr=document.getElementById('nkSr').value.trim();if(!rg){toast('請選地區','e');return;}if(!nm){toast('請輸入名字','e');return;}const d={region:rg,name:nm,phone:ph,contact:ct,channel:ch,blessingFee:isNaN(bf)?0:Math.max(0,bf),serviceRegion:sr};if(id){const i=monks.findIndex(x=>x.id===id);if(i!==-1)monks[i]={...monks[i],...d};}else{monks.unshift({id:gId(),created_at:new Date().toISOString(),...d});}nkSync();clM('M0');toast(id?'已更新':'已新增','s');rV();}
 
 /* ===== 庫存管理 ===== */
-function rInv(){return `<div class="afu"><div class="flex flex-wrap items-center gap-1.5 mb-3"><div class="sx flex-1 min-w-[110px]"><span class="material-icons-outlined">search</span><input type="text" id="iS" class="fi" placeholder="搜尋..."></div><select id="iSt" class="fi w-auto text-[10px]"><option value="all">全部</option><option value="in-stock">在庫</option><option value="shipped">已出</option></select><select id="iRg" class="fi w-auto text-[10px]"><option value="all">地區</option>${REGIONS.map(r=>`<option value="${r}">${r}</option>`).join('')}</select><select id="iWh" class="fi w-auto text-[10px]"><option value="all">全部倉庫</option>${warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}</select><select id="iSo" class="fi w-auto text-[10px]"><option value="newest">最新</option><option value="ph">售價高→低</option><option value="code">編號 A→Z</option></select></div><div class="text-[10px] text-gold-700 mb-2.5">共 <strong class="text-gold-400" id="iC">${items.length}</strong> 張</div><div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2" id="iG"></div></div>`;}
+function rInv(){return `<div class="afu"><div class="flex flex-wrap items-center gap-1.5 mb-3"><div class="sx flex-1 min-w-[110px]"><span class="material-icons-outlined">search</span><input type="text" id="iS" class="fi" placeholder="搜尋編號、廠家、畫師、產品名稱..."></div><select id="iSt" class="fi w-auto text-[10px]"><option value="all">全部</option><option value="in-stock">在庫</option><option value="shipped">已出</option></select><select id="iRg" class="fi w-auto text-[10px]"><option value="all">地區</option>${REGIONS.map(r=>`<option value="${r}">${r}</option>`).join('')}</select><select id="iWh" class="fi w-auto text-[10px]"><option value="all">全部倉庫</option>${warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}</select><select id="iSo" class="fi w-auto text-[10px]"><option value="newest">最新</option><option value="ph">售價高→低</option><option value="code">編號 A→Z</option></select>${userRole !== 'viewer' ? `<button class="bt bt-o bt-sm" onclick="openBatchEdit()"><span class="material-icons-outlined text-xs">edit_note</span>批量編輯</button>` : ''}</div><div class="bg-ink-600 rounded-lg p-2 mb-3"><div class="flex flex-wrap items-center gap-2 text-[10px]"><span class="text-gold-700 font-semibold flex items-center gap-1"><span class="material-icons-outlined" style="font-size:12px">filter_list</span>進階篩選：</span><input type="text" id="iPN" class="fi flex-1 min-w-[120px] text-[10px] py-1" placeholder="產品名稱關鍵字" oninput="fInv()"><input type="text" id="iPD" class="fi flex-1 min-w-[120px] text-[10px] py-1" placeholder="商品描述關鍵字" oninput="fInv()"></div></div><div class="text-[10px] text-gold-700 mb-2.5">共 <strong class="text-gold-400" id="iC">${items.length}</strong> 張</div><div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2" id="iG"></div></div>`;}
 function rIC(f){const g=document.getElementById('iG');if(!g)return;if(!f.length){g.innerHTML='<div class="col-span-full text-center py-12"><span class="material-icons-outlined text-3xl text-gold-900 mb-1 block">inbox</span><p class="text-[10px] text-gold-700">無匹配</p></div>';return;}
 const ad=S.alertDays||180;
-g.innerHTML=f.map((item,idx)=>{const slow=item.status==='in-stock'&&daysSince(item.purchaseDate)>ad;return `<div class="ic afu" style="animation-delay:${idx*.02}s" onclick="sDt('${item.id}')"><div class="relative overflow-hidden bg-ink-600">${item.image?`<img src="${item.image}" loading="lazy">`:`<div class="w-full aspect-[3/4] flex flex-col items-center justify-center bg-gradient-to-b from-ink-300 to-ink-500"><span class="material-icons-outlined text-2xl text-gold-900 mb-0.5">image</span><span class="text-[9px] text-gold-900">未上傳</span></div>`}<div class="absolute top-1 right-1 flex gap-0.5"><span class="bg ${item.status==='in-stock'?'bg-s':'bg-h'} text-[8px]">${item.status==='in-stock'?'在庫':'已出'}</span>${slow?'<span class="bg bg-w text-[8px]">滯銷</span>':''}</div></div><div class="p-1.5"><p class="text-[10px] font-bold truncate mb-0.5">${item.code}</p><p class="text-[8px] text-gold-700 mb-1 truncate">${item.region} · ${(item.painter||item.maker||'').length>5?(item.painter||item.maker).substr(0,5)+'…':item.painter||item.maker}</p><div class="flex items-end justify-between"><div><p class="text-[7px] text-gold-800">售價</p><p class="fs font-bold text-gold-400 text-[11px]">${fM(item.price)}</p></div><div class="text-right"><p class="text-[7px] text-gold-800">成本</p><p class="text-[9px] text-gold-700">${fM(item.cost)}</p></div></div></div></div>`;}).join('');}
+const searchKeyword = (document.getElementById('iS')?.value || '').trim();
+g.innerHTML=f.map((item,idx)=>{const slow=item.status==='in-stock'&&daysSince(item.purchaseDate)>ad;return `<div class="ic afu" style="animation-delay:${idx*.02}s"><div class="relative overflow-hidden bg-ink-600" onclick="sDt('${item.id}')">${item.image?`<img src="${item.image}" loading="lazy">`:`<div class="w-full aspect-[3/4] flex flex-col items-center justify-center bg-gradient-to-b from-ink-300 to-ink-500"><span class="material-icons-outlined text-2xl text-gold-900 mb-0.5">image</span><span class="text-[9px] text-gold-900">未上傳</span></div>`}<div class="absolute top-1 right-1 flex gap-0.5"><span class="bg ${item.status==='in-stock'?'bg-s':'bg-h'} text-[8px]">${item.status==='in-stock'?'在庫':'已出'}</span>${slow?'<span class="bg bg-w text-[8px]">滯銷</span>':''}</div></div><div class="p-1.5"><p class="text-[10px] font-bold truncate mb-0.5">${highlightText(item.code, searchKeyword)}</p>${item.productName?`<p class="text-[8px] text-gold-500 mb-0.5 truncate flex items-center gap-0.5 cursor-pointer hover:text-gold-400 transition-colors" title="${item.productDescription||item.productName}" onclick="event.stopPropagation();showProductDesc('${item.id}')"><span class="material-icons-outlined" style="font-size:10px">label</span>${highlightText(item.productName, searchKeyword)}</p>`:''}<p class="text-[8px] text-gold-700 mb-1 truncate">${highlightText(item.region, searchKeyword)} · ${highlightText((item.painter||item.maker||'').length>5?(item.painter||item.maker).substr(0,5)+'…':item.painter||item.maker, searchKeyword)}</p><div class="flex items-end justify-between"><div><p class="text-[7px] text-gold-800">售價</p><p class="fs font-bold text-gold-400 text-[11px]">${fM(item.price)}</p></div><div class="text-right"><p class="text-[7px] text-gold-800">成本</p><p class="text-[9px] text-gold-700">${fM(item.cost)}</p></div></div>${userRole !== 'viewer' ? `<div class="mt-1.5 pt-1.5 border-t border-ink-100 flex gap-1"><button class="bt bt-o bt-sm flex-1 text-[9px] py-1" onclick="event.stopPropagation();oAI('${item.id}')"><span class="material-icons-outlined text-xs mr-0.5">edit</span>編輯</button></div>` : ''}</div></div>`;}).join('');}
 function fInv() {
   const s = (document.getElementById('iS')?.value || '').toLowerCase(),
     st = document.getElementById('iSt')?.value || 'all',
     rg = document.getElementById('iRg')?.value || 'all',
     wh = document.getElementById('iWh')?.value || 'all',
-    so = document.getElementById('iSo')?.value || 'newest';
+    so = document.getElementById('iSo')?.value || 'newest',
+    pn = (document.getElementById('iPN')?.value || '').toLowerCase(),
+    pd = (document.getElementById('iPD')?.value || '').toLowerCase();
   let f = items.filter(i => {
     if (st !== 'all' && i.status !== st) return false;
     if (rg !== 'all' && i.region !== rg) return false;
     if (wh !== 'all' && i.warehouse !== wh) return false;
-    if (s && !(i.code.toLowerCase().includes(s) || (i.maker || '').toLowerCase().includes(s) || (i.painter || '').toLowerCase().includes(s) || i.region.includes(s))) return false;
+    if (pn && !(i.productName || '').toLowerCase().includes(pn)) return false;
+    if (pd && !(i.productDescription || '').toLowerCase().includes(pd)) return false;
+    if (s && !(i.code.toLowerCase().includes(s) || (i.maker || '').toLowerCase().includes(s) || (i.painter || '').toLowerCase().includes(s) || i.region.includes(s) || (i.productName || '').toLowerCase().includes(s) || (i.productDescription || '').toLowerCase().includes(s))) return false;
     return true;
   });
   if (so === 'ph') f.sort((a, b) => b.price - a.price);
@@ -1653,8 +1818,8 @@ function rFin(){
 }
 
 function expCSV(){
-    const rows=[['編號','畫師','廠家','地區','成本','額外成本','售價','毛利','毛利率','含稅','含框','進貨日','出貨日','客戶','代理','定金','尾款','尾款到期','狀態']];
-    items.forEach(i=>{const gp=i.price-i.cost-(i.extraCost||0);rows.push([i.code,i.painter||'',i.maker,i.region,i.cost,i.extraCost||0,i.price,gp,i.price>0?((gp/i.price)*100).toFixed(1)+'%':'0%',i.taxIncluded?'是':'否',i.framed?'是':'否',i.purchaseDate,i.shipmentDate||'',i.custName||'',i.agentName||'',i.deposit||0,i.balance||0,i.balanceDue||'',i.status==='in-stock'?'在庫':'已出']);});
+    const rows=[['編號','產品名稱','商品描述','畫師','廠家','地區','成本','額外成本','售價','毛利','毛利率','含稅','含框','進貨日','出貨日','客戶','代理','定金','尾款','尾款到期','狀態']];
+    items.forEach(i=>{const gp=i.price-i.cost-(i.extraCost||0);rows.push([i.code,i.productName||'',i.productDescription||'',i.painter||'',i.maker,i.region,i.cost,i.extraCost||0,i.price,gp,i.price>0?((gp/i.price)*100).toFixed(1)+'%':'0%',i.taxIncluded?'是':'否',i.framed?'是':'否',i.purchaseDate,i.shipmentDate||'',i.custName||'',i.agentName||'',i.deposit||0,i.balance||0,i.balanceDue||'',i.status==='in-stock'?'在庫':'已出']);});
     const bom='\uFEFF'+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
     const blob=new Blob([bom],{type:'text/csv;charset=utf-8'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`財務報表_${new Date().toISOString().split('T')[0]}.csv`;a.click();toast('CSV 已匯出','s');
@@ -2075,10 +2240,20 @@ function fxPanelHTML(costVal) {
 </div>`;
 }
 
-function oAI(){
-  document.getElementById('M2T').textContent='新增唐卡進貨';
-  document.getElementById('M2B').innerHTML=`<input type="hidden" id="eId" value=""><div class="mb-3"><label class="fl">唐卡圖片</label><div class="uz" id="uZ" onclick="document.getElementById('fImg').click()"><div id="uH"><span class="material-icons-outlined text-2xl text-gold-800 mb-0.5 block">add_photo_alternate</span><p class="text-[10px] text-gold-700">點擊上傳</p></div><img id="uP" class="hidden max-h-40 mx-auto rounded-lg"></div><input type="file" id="fImg" accept="image/*" class="hidden" onchange="hIU(event)"></div><div class="grid grid-cols-2 gap-2.5"><div><label class="fl">編號 *</label><input type="text" id="fCo" class="fi" value="${gCode()}"></div><div><label class="fl">地區 *</label><select id="fRg" class="fi"><option value="">選擇</option>${REGIONS.map(r=>`<option value="${r}" ${S.defRegion===r?'selected':''}>${r}</option>`).join('')}</select></div><div class="col-span-2"><label class="fl">產品名稱</label><input type="text" id="fPN" class="fi" placeholder="例：綠度母唐卡、文殊菩薩"></div><div class="col-span-2"><label class="fl">商品描述</label><textarea id="fPD2" class="fi" rows="2" placeholder="尺寸、材質、工藝等詳細描述"></textarea></div><div class="col-span-2"><label class="fl">畫師名稱</label><input type="text" id="fPt" class="fi" placeholder="自訂輸入畫師名稱"></div><div class="col-span-2"><label class="fl">來源廠家 *</label><input type="text" id="fMk" class="fi" list="mkDL" placeholder="輸入或選擇"><datalist id="mkDL">${makers.map(m=>`<option value="${m.name}">`).join('')}</datalist></div>${fxPanelHTML('')}<div><label class="fl">成本 * <span class="text-gold-800 font-normal">（台幣 NT$）</span></label><input type="number" id="fCs" class="fi" min="0" inputmode="numeric" placeholder="可由上方換算帶入"></div><div><label class="fl">額外成本</label><input type="number" id="fEc" class="fi" value="0" min="0" inputmode="numeric" title="稅費、框成本、運費等"></div><div><label class="fl">售價 *</label><input type="number" id="fPr" class="fi" min="0" inputmode="numeric"></div><div><label class="fl">含稅</label><select id="fTx" class="fi"><option value="yes" ${S.defTax?'selected':''}>含稅</option><option value="no" ${!S.defTax?'selected':''}>未含稅</option></select></div><div><label class="fl">含框</label><select id="fFr" class="fi"><option value="no" ${!S.defFrame?'selected':''}>無框</option><option value="yes" ${S.defFrame?'selected':''}>含框</option></select></div><div><label class="fl">進貨日期 *</label><input type="date" id="fPD" class="fi" value="${new Date().toISOString().split('T')[0]}"></div><div><label class="fl">倉庫</label><select id="fWh" class="fi"><option value="">未指定</option>${warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}</select></div><div><label class="fl">備註</label><input type="text" id="fNt" class="fi"></div></div><div class="flex justify-end gap-2 mt-4 pb-2"><button class="bt bt-o" onclick="clM('M2')">取消</button><button class="bt bt-g" onclick="sIt()"><span class="material-icons-outlined text-xs">save</span>儲存</button></div>`;
-  curImg='';curHash=null;
+function oAI(eid){
+  if (eid) {
+    // 編輯模式
+    const item = items.find(i => i.id === eid);
+    if (!item) return;
+    document.getElementById('M2T').textContent='編輯唐卡';
+    document.getElementById('M2B').innerHTML=`<input type="hidden" id="eId" value="${eid}"><div class="mb-3"><label class="fl">唐卡圖片</label><div class="uz" id="uZ" onclick="document.getElementById('fImg').click()"><div id="uH"><span class="material-icons-outlined text-2xl text-gold-800 mb-0.5 block">add_photo_alternate</span><p class="text-[10px] text-gold-700">點擊更換</p></div><img id="uP" class="${item.image?'':'hidden'} max-h-40 mx-auto rounded-lg" src="${item.image||''}"></div><input type="file" id="fImg" accept="image/*" class="hidden" onchange="hIU(event)"></div><div class="grid grid-cols-2 gap-2.5"><div><label class="fl">編號 *</label><input type="text" id="fCo" class="fi" value="${item.code}"></div><div><label class="fl">地區 *</label><select id="fRg" class="fi"><option value="">選擇</option>${REGIONS.map(r=>`<option value="${r}" ${item.region===r?'selected':''}>${r}</option>`).join('')}</select></div><div class="col-span-2"><label class="fl">產品名稱</label><input type="text" id="fPN" class="fi" placeholder="例：綠度母唐卡、文殊菩薩" value="${item.productName||''}"></div><div class="col-span-2"><label class="fl">商品描述</label><textarea id="fPD2" class="fi" rows="2" placeholder="尺寸、材質、工藝等詳細描述">${item.productDescription||''}</textarea></div><div class="col-span-2"><label class="fl">畫師名稱</label><input type="text" id="fPt" class="fi" placeholder="自訂輸入畫師名稱" value="${item.painter||''}"></div><div class="col-span-2"><label class="fl">來源廠家 *</label><input type="text" id="fMk" class="fi" list="mkDL" placeholder="輸入或選擇" value="${item.maker}"><datalist id="mkDL">${makers.map(m=>`<option value="${m.name}">`).join('')}</datalist></div>${fxPanelHTML(item.cost)}<div><label class="fl">成本 * <span class="text-gold-800 font-normal">（台幣 NT$）</span></label><input type="number" id="fCs" class="fi" min="0" inputmode="numeric" value="${item.cost}" placeholder="可由上方換算帶入"></div><div><label class="fl">額外成本</label><input type="number" id="fEc" class="fi" value="${item.extraCost||0}" min="0" inputmode="numeric" title="稅費、框成本、運費等"></div><div><label class="fl">售價 *</label><input type="number" id="fPr" class="fi" min="0" inputmode="numeric" value="${item.price}"></div><div><label class="fl">含稅</label><select id="fTx" class="fi"><option value="yes" ${item.taxIncluded?'selected':''}>含稅</option><option value="no" ${!item.taxIncluded?'selected':''}>未含稅</option></select></div><div><label class="fl">含框</label><select id="fFr" class="fi"><option value="no" ${!item.framed?'selected':''}>無框</option><option value="yes" ${item.framed?'selected':''}>含框</option></select></div><div><label class="fl">進貨日期 *</label><input type="date" id="fPD" class="fi" value="${item.purchaseDate||''}"></div><div><label class="fl">倉庫</label><select id="fWh" class="fi"><option value="">未指定</option>${warehouses.map(w=>`<option value="${w.id}" ${item.warehouse===w.id?'selected':''}>${w.name}</option>`).join('')}</select></div><div><label class="fl">備註</label><input type="text" id="fNt" class="fi" value="${item.notes||''}"></div></div><div class="flex justify-end gap-2 mt-4 pb-2"><button class="bt bt-o" onclick="clM('M2')">取消</button><button class="bt bt-g" onclick="sIt()"><span class="material-icons-outlined text-xs">save</span>儲存</button></div>`;
+    curImg=item.image||'';curHash=item.imageHash||null;
+  } else {
+    // 新增模式
+    document.getElementById('M2T').textContent='新增唐卡進貨';
+    document.getElementById('M2B').innerHTML=`<input type="hidden" id="eId" value=""><div class="mb-3"><label class="fl">唐卡圖片</label><div class="uz" id="uZ" onclick="document.getElementById('fImg').click()"><div id="uH"><span class="material-icons-outlined text-2xl text-gold-800 mb-0.5 block">add_photo_alternate</span><p class="text-[10px] text-gold-700">點擊上傳</p></div><img id="uP" class="hidden max-h-40 mx-auto rounded-lg"></div><input type="file" id="fImg" accept="image/*" class="hidden" onchange="hIU(event)"></div><div class="grid grid-cols-2 gap-2.5"><div><label class="fl">編號 *</label><input type="text" id="fCo" class="fi" value="${gCode()}"></div><div><label class="fl">地區 *</label><select id="fRg" class="fi"><option value="">選擇</option>${REGIONS.map(r=>`<option value="${r}" ${S.defRegion===r?'selected':''}>${r}</option>`).join('')}</select></div><div class="col-span-2"><label class="fl">產品名稱</label><input type="text" id="fPN" class="fi" placeholder="例：綠度母唐卡、文殊菩薩"></div><div class="col-span-2"><label class="fl">商品描述</label><textarea id="fPD2" class="fi" rows="2" placeholder="尺寸、材質、工藝等詳細描述"></textarea></div><div class="col-span-2"><label class="fl">畫師名稱</label><input type="text" id="fPt" class="fi" placeholder="自訂輸入畫師名稱"></div><div class="col-span-2"><label class="fl">來源廠家 *</label><input type="text" id="fMk" class="fi" list="mkDL" placeholder="輸入或選擇"><datalist id="mkDL">${makers.map(m=>`<option value="${m.name}">`).join('')}</datalist></div>${fxPanelHTML('')}<div><label class="fl">成本 * <span class="text-gold-800 font-normal">（台幣 NT$）</span></label><input type="number" id="fCs" class="fi" min="0" inputmode="numeric" placeholder="可由上方換算帶入"></div><div><label class="fl">額外成本</label><input type="number" id="fEc" class="fi" value="0" min="0" inputmode="numeric" title="稅費、框成本、運費等"></div><div><label class="fl">售價 *</label><input type="number" id="fPr" class="fi" min="0" inputmode="numeric"></div><div><label class="fl">含稅</label><select id="fTx" class="fi"><option value="yes" ${S.defTax?'selected':''}>含稅</option><option value="no" ${!S.defTax?'selected':''}>未含稅</option></select></div><div><label class="fl">含框</label><select id="fFr" class="fi"><option value="no" ${!S.defFrame?'selected':''}>無框</option><option value="yes" ${S.defFrame?'selected':''}>含框</option></select></div><div><label class="fl">進貨日期 *</label><input type="date" id="fPD" class="fi" value="${new Date().toISOString().split('T')[0]}"></div><div><label class="fl">倉庫</label><select id="fWh" class="fi"><option value="">未指定</option>${warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}</select></div><div><label class="fl">備註</label><input type="text" id="fNt" class="fi"></div></div><div class="flex justify-end gap-2 mt-4 pb-2"><button class="bt bt-o" onclick="clM('M2')">取消</button><button class="bt bt-g" onclick="sIt()"><span class="material-icons-outlined text-xs">save</span>儲存</button></div>`;
+    curImg='';curHash=null;
+  }
   opM('M2');
   setTimeout(() => {
     if (document.getElementById('fxSpread')) document.getElementById('fxSpread').value = S.fxSpread || 1.5;
@@ -2096,7 +2271,8 @@ document.addEventListener('change', function (e) {
   }
 });
 function sIt() {
-  const co = document.getElementById('fCo').value.trim(),
+  const eid = document.getElementById('eId').value,
+    co = document.getElementById('fCo').value.trim(),
     rg = document.getElementById('fRg').value,
     pn = document.getElementById('fPN')?.value.trim() || '',
     pd2 = document.getElementById('fPD2')?.value.trim() || '',
@@ -2116,20 +2292,49 @@ function sIt() {
   if (isNaN(cs) || cs < 0) { toast('成本無效', 'e'); return; }
   if (isNaN(pr) || pr < 0) { toast('售價無效', 'e'); return; }
   if (!pd) { toast('請選日期', 'e'); return; }
-  if (S.forbidDupCode !== false && items.some(i => i.code === co)) { toast('編號重複，禁止新增', 'e'); return; }
-  items.unshift({
-    id: gId(), code: co, image: curImg, imageHash: curHash, region: rg, painter: pt, maker: mk,
-    productName: pn, productDescription: pd2,
-    cost: cs, extraCost: ec, price: pr, taxIncluded: tx, framed: fr, purchaseDate: pd,
-    shipmentDate: null, shipNotes: '', status: 'in-stock', notes: nt,
-    custName: '', custPhone: '', agentName: '', deposit: 0, balance: 0, balanceDue: '', created_at: pd,
-    warehouse: wh
-  });
-  S.codeNext = (S.codeNext || 1) + 1;
+  
+  if (eid) {
+    // 編輯模式
+    const i = items.findIndex(x => x.id === eid);
+    if (i !== -1) {
+      items[i] = {
+        ...items[i],
+        code: co,
+        image: curImg,
+        imageHash: curHash,
+        region: rg,
+        painter: pt,
+        maker: mk,
+        productName: pn,
+        productDescription: pd2,
+        cost: cs,
+        extraCost: ec,
+        price: pr,
+        taxIncluded: tx,
+        framed: fr,
+        purchaseDate: pd,
+        notes: nt,
+        warehouse: wh
+      };
+    }
+    toast('已更新', 's');
+  } else {
+    // 新增模式
+    if (S.forbidDupCode !== false && items.some(i => i.code === co)) { toast('編號重複，禁止新增', 'e'); return; }
+    items.unshift({
+      id: gId(), code: co, image: curImg, imageHash: curHash, region: rg, painter: pt, maker: mk,
+      productName: pn, productDescription: pd2,
+      cost: cs, extraCost: ec, price: pr, taxIncluded: tx, framed: fr, purchaseDate: pd,
+      shipmentDate: null, shipNotes: '', status: 'in-stock', notes: nt,
+      custName: '', custPhone: '', agentName: '', deposit: 0, balance: 0, balanceDue: '', created_at: pd,
+      warehouse: wh
+    });
+    S.codeNext = (S.codeNext || 1) + 1;
+    toast('進貨成功', 's');
+  }
   sS();
   sI();
   clM('M2');
-  toast('進貨成功', 's');
   rV();
 }
 
