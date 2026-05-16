@@ -331,6 +331,13 @@ const KI='tk_items',KM='tk_makers',KC='tk_customers',KA='tk_agents',KN='tk_monks
 const PAY_OPTS=['現金匯款','微信支付','刷卡支付','找人代付','支付寶支付'];
 const REGIONS=['西藏','尼泊爾','不丹','拉達克','蒙古','內地','其他'];
 const CHAN_OPTS=['展會認識','網路搜尋','朋友介紹','主動開發','社群媒體','廠商自薦','其他'];
+
+/* Cloudinary 設定（直接寫入代碼） */
+const CLOUDINARY_CONFIG = {
+  cloudName: 'dommszmnd',
+  uploadPreset: 'thangka_upload'
+};
+
 let items=[],makers=[],customers=[],agents=[],monks=[],warehouses=[],S={},curImg='',curHash='',shipSelId='';
 
 /* ===== Supabase Auth & Sync ===== */
@@ -470,6 +477,10 @@ async function initData() {
 
   showSyncOverlay(false);
   document.getElementById('SBT').textContent = S.shopName;
+  
+  // 自動遷移圖片到 Cloudinary
+  await migrateImagesToCloudinary();
+  
   swV('dashboard');
 }
 
@@ -631,10 +642,38 @@ async function sI() {
         warehouse: i.warehouse || ''  // 倉庫ID
       }));
       const { error } = await sb.from('items').upsert(itemsToSync, { onConflict: 'id' });
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase sync error:', error);
+        toast('雲端同步失敗: ' + error.message, 'e');
+        // 如果同步失敗，仍然保存到 LocalStorage
+        try {
+          localStorage.setItem(KI, JSON.stringify(items));
+        } catch (localErr) {
+          console.error('LocalStorage save error:', localErr);
+          if (localErr.name === 'QuotaExceededError') {
+            toast('儲存空間不足，請減少圖片數量或大小', 'e');
+          }
+        }
+      }
     } catch (e) { 
       console.error('sI sync error:', e); 
       toast('庫存同步失敗: ' + e.message, 'e');
+      // 嘗試保存到 LocalStorage
+      try {
+        localStorage.setItem(KI, JSON.stringify(items));
+      } catch (localErr) {
+        console.error('LocalStorage fallback error:', localErr);
+      }
+    }
+  } else {
+    // 沒有登入，只保存到 LocalStorage
+    try {
+      localStorage.setItem(KI, JSON.stringify(items));
+    } catch (e) {
+      console.error('LocalStorage save error:', e);
+      if (e.name === 'QuotaExceededError') {
+        toast('儲存空間不足，請清理舊數據', 'e');
+      }
     }
   }
 }
@@ -958,24 +997,161 @@ function initD() { /* 保留空殼避免舊版呼叫報錯 */ }
 async function hIU(e) {
   const f = e.target.files ? e.target.files[0] : e;
   if (!f) return;
+  
+  // 檢查檔案大小（限制 10MB）
+  if (f.size > 10 * 1024 * 1024) {
+    toast('圖片過大（超過 10MB），請選擇較小的圖片', 'e');
+    return;
+  }
+  
+  // 顯示上傳中提示
+  toast('正在處理圖片...', 'i');
+  
   const r = new FileReader();
   r.onload = async function (ev) {
     const img = new Image();
     img.onload = async function () {
       const c = document.createElement('canvas');
       let w = img.width, h = img.height;
-      if (w > 800) { h *= 800 / w; w = 800; }
-      if (h > 1200) { w *= 1200 / h; h = 1200; }
+      
+      // 智能壓縮：根據原始大小和用途決定最大尺寸
+      const targetSize = S.imgMaxSize || (f.size > 3 * 1024 * 1024 ? 1400 : 1800);
+      
+      if (w > targetSize) { h *= targetSize / w; w = targetSize; }
+      if (h > targetSize * 1.5) { w *= (targetSize * 1.5) / h; h = targetSize * 1.5; }
+      
       c.width = Math.max(1, Math.round(w));
       c.height = Math.max(1, Math.round(h));
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      curImg = c.toDataURL('image/jpeg', 0.75);
-      curHash = await eH(img);
-      const p = document.getElementById('uP'), ph = document.getElementById('uH'), z = document.getElementById('uZ');
-      p.src = curImg;
-      p.classList.remove('hidden');
-      ph.classList.add('hidden');
-      z.classList.add('hi');
+      
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      
+      // 轉換為 Blob
+      let mimeType = 'image/webp';
+      let quality = S.imgQuality || 0.85;
+      
+      // 檢查瀏覽器是否支援 WebP
+      const webpTest = c.toDataURL('image/webp');
+      if (!webpTest.startsWith('data:image/webp')) {
+        mimeType = 'image/jpeg';
+        quality = (S.imgQuality || 0.85) + 0.05;
+      }
+      
+      // 轉換 canvas 為 Blob
+      const blob = await new Promise(resolve => {
+        c.toBlob(resolve, mimeType, quality);
+      });
+      
+      // 嘗試上傳到 Cloudinary（優先）
+      try {
+        const cloudName = CLOUDINARY_CONFIG.cloudName;
+        const uploadPreset = CLOUDINARY_CONFIG.uploadPreset;
+        
+        if (!cloudName || !uploadPreset) {
+          throw new Error('Cloudinary 未正確設定');
+        }
+        
+        // 建立 FormData
+        const formData = new FormData();
+        formData.append('file', blob, 'image.webp');
+        formData.append('upload_preset', uploadPreset);
+        formData.append('folder', 'thangka-images');
+        
+        // 上傳到 Cloudinary
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+          throw new Error(data.error.message);
+        }
+        
+        // 獲取優化後的圖片 URL（Cloudinary 自動優化）
+        curImg = data.secure_url; // https URL
+        curHash = await eH(img);
+        
+        const p = document.getElementById('uP'), ph = document.getElementById('uH'), z = document.getElementById('uZ');
+        p.src = curImg;
+        p.classList.remove('hidden');
+        ph.classList.add('hidden');
+        z.classList.add('hi');
+        
+        // 顯示成功提示
+        const originalSize = (f.size / 1024).toFixed(1);
+        const uploadedSize = (data.bytes / 1024).toFixed(1);
+        const reduction = ((1 - (data.bytes / f.size)) * 100).toFixed(1);
+        
+        toast(`✅ 圖片已上傳至 Cloudinary：${originalSize}KB → ${uploadedSize}KB (減少 ${reduction}%)`, 's');
+        
+      } catch (err) {
+        console.error('Cloudinary upload failed:', err);
+        
+        // 降級：嘗試 Supabase Storage
+        try {
+          if (!sb) throw new Error('Supabase 未初始化');
+          
+          const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.webp`;
+          const { data, error } = await sb.storage
+            .from('thangka-images')
+            .upload(fileName, blob, {
+              cacheControl: '3600',
+              upsert: false,
+              contentType: mimeType
+            });
+          
+          if (error) throw error;
+          
+          // 獲取公開 URL
+          const { data: urlData } = sb.storage
+            .from('thangka-images')
+            .getPublicUrl(fileName);
+          
+          curImg = urlData.publicUrl;
+          curHash = await eH(img);
+          
+          const p = document.getElementById('uP'), ph = document.getElementById('uH'), z = document.getElementById('uZ');
+          p.src = curImg;
+          p.classList.remove('hidden');
+          ph.classList.add('hidden');
+          z.classList.add('hi');
+          
+          const originalSize = (f.size / 1024).toFixed(1);
+          const uploadedSize = (blob.size / 1024).toFixed(1);
+          const reduction = ((1 - (blob.size / f.size)) * 100).toFixed(1);
+          
+          toast(`✅ 圖片已上傳至 Supabase：${originalSize}KB → ${uploadedSize}KB (減少 ${reduction}%)`, 's');
+          
+        } catch (supabaseErr) {
+          console.error('Supabase Storage upload also failed:', supabaseErr);
+          toast('⚠️ 雲端上傳失敗，使用本機儲存', 'e');
+          
+          // 最終降級：使用 base64
+          let compressed = c.toDataURL(mimeType, quality);
+          let attempts = 0;
+          while (compressed.length > 1 * 1024 * 1024 && quality > 0.5 && attempts < 5) {
+            quality -= 0.1;
+            compressed = c.toDataURL(mimeType, quality);
+            attempts++;
+          }
+          
+          curImg = compressed;
+          curHash = await eH(img);
+          
+          const p = document.getElementById('uP'), ph = document.getElementById('uH'), z = document.getElementById('uZ');
+          p.src = curImg;
+          p.classList.remove('hidden');
+          ph.classList.add('hidden');
+          z.classList.add('hi');
+          
+          const sizeKB = Math.round(curImg.length * 0.75 / 1024);
+          toast(`圖片已轉為本機儲存：${sizeKB}KB`, 'i');
+        }
+      }
     };
     img.src = ev.target.result;
   };
@@ -2041,7 +2217,7 @@ function rSet(){
     </div>
   </div>`;
 
-  h += `<div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs">tune</span>基本設置</p><div class="sgr"><div class="srw"><label class="text-[11px]">系統名稱</label><input type="text" id="sN" class="fi" style="max-width:160px" value="${S.shopName}" onchange="uS('shopName',this.value)"></div><div class="srw"><label class="text-[11px]">貨幣符號</label><input type="text" id="sC" class="fi" style="max-width:60px" value="${S.currency}" onchange="uS('currency',this.value)"></div><div class="srw"><label class="text-[11px]">編號前綴</label><input type="text" id="sP" class="fi" style="max-width:80px" value="${S.codePrefix}" onchange="uS('codePrefix',this.value)"></div><div class="srw"><label class="text-[11px]">下一流水號</label><input type="number" id="sNX" class="fi" style="max-width:70px" value="${S.codeNext}" min="1" onchange="uS('codeNext',parseInt(this.value)||1)"></div><div class="srw"><label class="text-[11px]">禁止重複編號</label><label class="tgl"><input type="checkbox" ${S.forbidDupCode!==false?'checked':''} onchange="uS('forbidDupCode',this.checked)"><span class="sl"></span></label></div></div></div><div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs">receipt_long</span>進貨預設</p><div class="sgr"><div class="srw"><label class="text-[11px]">預設地區</label><select id="sDR" class="fi" style="max-width:100px" onchange="uS('defRegion',this.value)"><option value="">不自動</option>${REGIONS.map(r=>`<option value="${r}" ${S.defRegion===r?'selected':''}>${r}</option>`).join('')}</select></div><div class="srw"><label class="text-[11px]">預設含稅</label><label class="tgl"><input type="checkbox" ${S.defTax?'checked':''} onchange="uS('defTax',this.checked)"><span class="sl"></span></label></div><div class="srw"><label class="text-[11px]">預設含框</label><label class="tgl"><input type="checkbox" ${S.defFrame?'checked':''} onchange="uS('defFrame',this.checked)"><span class="sl"></span></label></div></div></div><div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs">warning</span>預警設置</p><div class="sgr"><div class="srw"><label class="text-[11px]">滯銷天數門檻</label><input type="number" id="sAD" class="fi" style="max-width:80px" value="${S.alertDays||180}" min="30" onchange="uS('alertDays',parseInt(this.value)||180)"><span class="text-[9px] text-gold-800 ml-1">天</span></div></div></div><div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs">folder_open</span>資料管理</p><div class="sgr"><div class="srw"><label class="text-[11px]">匯出備份</label><button class="bt bt-o bt-sm" onclick="expD()"><span class="material-icons-outlined" style="font-size:11px">download</span>匯出</button></div><div class="srw"><label class="text-[11px]">匯入資料</label><button class="bt bt-o bt-sm" onclick="document.getElementById('impF').click()"><span class="material-icons-outlined" style="font-size:11px">upload</span>匯入</button><input type="file" id="impF" accept=".json" class="hidden" onchange="hImp(event)"></div><div class="srw" style="background:rgba(217,83,79,.03)"><label class="text-err text-[11px]">清除所有資料</label><button class="bt bt-d bt-sm" onclick="clrAll()"><span class="material-icons-outlined" style="font-size:11px">delete_forever</span>清除</button></div></div></div><div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs">cloud_sync</span>Supabase 同步</p><div class="sgr"><div class="srw"><label class="text-[11px]">資料總計</label><span class="text-[11px] fs font-bold text-gold-400">${items.length}張 / ${makers.length}廠 / ${customers.length}客 / ${agents.length}代 / ${monks.length}僧</span></div><div class="srw"><label class="text-[11px]">手動重新同步</label><button class="bt bt-o bt-sm" onclick="manualSync()"><span class="material-icons-outlined" style="font-size:11px">sync</span>立即同步</button></div><div class="srw"><label class="text-[11px]">本機快取大小</label><span class="text-[10px] text-gold-700">${(new Blob([localStorage.getItem(KI)||'',localStorage.getItem(KM)||'',localStorage.getItem(KC)||'',localStorage.getItem(KA)||'',localStorage.getItem(KN)||'',localStorage.getItem(KS)||'']).size/1024).toFixed(1)} KB</span></div></div></div><div class="pb-4"></div></div>`;
+  h += `<div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs">tune</span>基本設置</p><div class="sgr"><div class="srw"><label class="text-[11px]">系統名稱</label><input type="text" id="sN" class="fi" style="max-width:160px" value="${S.shopName}" onchange="uS('shopName',this.value)"></div><div class="srw"><label class="text-[11px]">貨幣符號</label><input type="text" id="sC" class="fi" style="max-width:60px" value="${S.currency}" onchange="uS('currency',this.value)"></div><div class="srw"><label class="text-[11px]">編號前綴</label><input type="text" id="sP" class="fi" style="max-width:80px" value="${S.codePrefix}" onchange="uS('codePrefix',this.value)"></div><div class="srw"><label class="text-[11px]">下一流水號</label><input type="number" id="sNX" class="fi" style="max-width:70px" value="${S.codeNext}" min="1" onchange="uS('codeNext',parseInt(this.value)||1)"></div><div class="srw"><label class="text-[11px]">禁止重複編號</label><label class="tgl"><input type="checkbox" ${S.forbidDupCode!==false?'checked':''} onchange="uS('forbidDupCode',this.checked)"><span class="sl"></span></label></div></div></div><div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs">receipt_long</span>進貨預設</p><div class="sgr"><div class="srw"><label class="text-[11px]">預設地區</label><select id="sDR" class="fi" style="max-width:100px" onchange="uS('defRegion',this.value)"><option value="">不自動</option>${REGIONS.map(r=>`<option value="${r}" ${S.defRegion===r?'selected':''}>${r}</option>`).join('')}</select></div><div class="srw"><label class="text-[11px]">預設含稅</label><label class="tgl"><input type="checkbox" ${S.defTax?'checked':''} onchange="uS('defTax',this.checked)"><span class="sl"></span></label></div><div class="srw"><label class="text-[11px]">預設含框</label><label class="tgl"><input type="checkbox" ${S.defFrame?'checked':''} onchange="uS('defFrame',this.checked)"><span class="sl"></span></label></div></div></div><div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs">warning</span>預警設置</p><div class="sgr"><div class="srw"><label class="text-[11px]">滯銷天數門檻</label><input type="number" id="sAD" class="fi" style="max-width:80px" value="${S.alertDays||180}" min="30" onchange="uS('alertDays',parseInt(this.value)||180)"><span class="text-[9px] text-gold-800 ml-1">天</span></div></div></div><div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs">image</span>圖片優化設置</p><div class="sgr"><div class="srw"><label class="text-[11px]">圖片最大尺寸</label><select id="sIS" class="fi" style="max-width:100px" onchange="uS('imgMaxSize',parseInt(this.value))"><option value="1200" ${(S.imgMaxSize||1400)===1200?'selected':''}>1200px (小)</option><option value="1400" ${(S.imgMaxSize||1400)===1400?'selected':''}>1400px (中)</option><option value="1600" ${(S.imgMaxSize||1400)===1600?'selected':''}>1600px (大)</option><option value="1800" ${(S.imgMaxSize||1400)===1800?'selected':''}>1800px (超大)</option></select></div><div class="srw"><label class="text-[11px]">圖片品質</label><select id="sIQ" class="fi" style="max-width:100px" onchange="uS('imgQuality',parseFloat(this.value))"><option value="0.7" ${(S.imgQuality||0.85)===0.7?'selected':''}>70% (省空間)</option><option value="0.8" ${(S.imgQuality||0.85)===0.8?'selected':''}>80% (平衡)</option><option value="0.85" ${(S.imgQuality||0.85)===0.85?'selected':''}>85% (推薦)</option><option value="0.9" ${(S.imgQuality||0.85)===0.9?'selected':''}>90% (高畫質)</option></select></div><div class="srw col-span-2"><label class="text-[11px]">說明</label><p class="text-[9px] text-gold-700">WebP 格式比 JPEG 小 25-35%，自動啟用。超過 1MB 會自動降低品質。</p></div></div></div><div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs">folder_open</span>資料管理</p><div class="sgr"><div class="srw"><label class="text-[11px]">匯出備份</label><button class="bt bt-o bt-sm" onclick="expD()"><span class="material-icons-outlined" style="font-size:11px">download</span>匯出</button></div><div class="srw"><label class="text-[11px]">匯入資料</label><button class="bt bt-o bt-sm" onclick="document.getElementById('impF').click()"><span class="material-icons-outlined" style="font-size:11px">upload</span>匯入</button><input type="file" id="impF" accept=".json" class="hidden" onchange="hImp(event)"></div><div class="srw" style="background:rgba(217,83,79,.03)"><label class="text-err text-[11px]">清除所有資料</label><button class="bt bt-d bt-sm" onclick="clrAll()"><span class="material-icons-outlined" style="font-size:11px">delete_forever</span>清除</button></div></div></div><div><p class="text-[10px] text-gold-600 font-medium mb-1.5 flex items-center gap-1"><span class="material-icons-outlined text-xs">cloud_sync</span>Supabase 同步</p><div class="sgr"><div class="srw"><label class="text-[11px]">資料總計</label><span class="text-[11px] fs font-bold text-gold-400">${items.length}張 / ${makers.length}廠 / ${customers.length}客 / ${agents.length}代 / ${monks.length}僧</span></div><div class="srw"><label class="text-[11px]">手動重新同步</label><button class="bt bt-o bt-sm" onclick="manualSync()"><span class="material-icons-outlined" style="font-size:11px">sync</span>立即同步</button></div><div class="srw"><label class="text-[11px]">本機快取大小</label><span class="text-[10px] text-gold-700">${(new Blob([localStorage.getItem(KI)||'',localStorage.getItem(KM)||'',localStorage.getItem(KC)||'',localStorage.getItem(KA)||'',localStorage.getItem(KN)||'',localStorage.getItem(KS)||'']).size/1024).toFixed(1)} KB</span></div></div></div><div class="pb-4"></div></div>`;
   return h;
 }
 
@@ -2064,6 +2240,115 @@ function setFontSize(size) {
   });
   const labels = {small:'小',medium:'中',large:'大'};
   toast(`字體已設為「${labels[size]}」`, 's');
+}
+
+/* 顯示 Cloudinary 設定指南 */
+function showCloudinaryGuide() {
+  const guide = `
+☁️ Cloudinary 設定指南（25GB 免費）
+
+步驟 1：註冊帳號
+• 前往 https://cloudinary.com/users/register/free
+• 使用 Email 或 Google 帳號註冊
+
+步驟 2：取得 Cloud Name
+• 登入後在 Dashboard 左上角可見
+• 例如：demo123
+• 複製到系統設置的「Cloud Name」欄位
+
+步驟 3：設定 Upload Preset
+• 點擊 Settings ⚙️ → Upload 標籤
+• 找到 Upload presets → Add upload preset
+• Mode: Unsigned（無簽名）
+• Preset name: thangka_upload
+• Folder: thangka-images（可選）
+• 點擊 Save
+• 將 preset name 填入系統設置
+
+完成！現在上傳圖片會自動儲存到 Cloudinary。
+
+優勢：
+✅ 25GB 免費儲存（是 Supabase 的 25 倍）
+✅ 25GB 月頻寬
+✅ 自動優化圖片
+✅ CDN 全球加速
+✅ 無限圖片數量
+  `;
+  alert(guide);
+}
+
+/* 遷移圖片到 Cloudinary（自動執行） */
+async function migrateImagesToCloudinary() {
+  // 檢查是否有圖片需要遷移
+  const itemsWithImages = items.filter(i => i.image && i.image.includes('supabase.co'));
+  
+  if (itemsWithImages.length === 0) {
+    console.log('沒有需要遷移的圖片');
+    return;
+  }
+  
+  console.log(`開始自動遷移 ${itemsWithImages.length} 張圖片到 Cloudinary...`);
+  
+  let successCount = 0;
+  let failCount = 0;
+  const total = itemsWithImages.length;
+  
+  for (let i = 0; i < itemsWithImages.length; i++) {
+    const item = itemsWithImages[i];
+    
+    try {
+      console.log(`遷移中... (${i + 1}/${total}) - ${item.code}`);
+      
+      // 下載圖片
+      const response = await fetch(item.image);
+      const blob = await response.blob();
+      
+      // 上傳到 Cloudinary
+      const formData = new FormData();
+      formData.append('file', blob, 'image.webp');
+      formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
+      formData.append('folder', 'thangka-images');
+      
+      const uploadResponse = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/image/upload`,
+        { method: 'POST', body: formData }
+      );
+      
+      const data = await uploadResponse.json();
+      
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+      
+      // 更新本地數據
+      item.image = data.secure_url;
+      successCount++;
+      
+      console.log(`✅ 成功遷移: ${item.code}`);
+      
+      // 每 5 張保存一次
+      if (successCount % 5 === 0) {
+        await sI();
+      }
+      
+    } catch (err) {
+      console.error(`❌ 遷移失敗 ${item.code}:`, err.message);
+      failCount++;
+    }
+  }
+  
+  // 最後保存
+  await sI();
+  
+  // 顯示結果
+  console.log(`遷移完成！成功: ${successCount}, 失敗: ${failCount}`);
+  
+  if (successCount > 0) {
+    toast(`已自動遷移 ${successCount} 張圖片到 Cloudinary ☁️`, 's');
+    rV(); // 重新渲染視圖
+  } else if (failCount > 0) {
+    toast(`圖片遷移失敗: ${failCount} 張`, 'e');
+  }
 }
 
 /* 手動重新同步 */
@@ -2297,11 +2582,15 @@ function sIt() {
     // 編輯模式
     const i = items.findIndex(x => x.id === eid);
     if (i !== -1) {
+      // 如果 curImg 為空，表示沒有上傳新圖片，保持原圖片
+      const finalImage = curImg || items[i].image;
+      const finalHash = curHash !== null ? curHash : items[i].imageHash;
+      
       items[i] = {
         ...items[i],
         code: co,
-        image: curImg,
-        imageHash: curHash,
+        image: finalImage,
+        imageHash: finalHash,
         region: rg,
         painter: pt,
         maker: mk,
