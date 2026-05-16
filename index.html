@@ -477,10 +477,6 @@ async function initData() {
 
   showSyncOverlay(false);
   document.getElementById('SBT').textContent = S.shopName;
-  
-  // 自動遷移圖片到 Cloudinary
-  await migrateImagesToCloudinary();
-  
   swV('dashboard');
 }
 
@@ -604,9 +600,7 @@ async function sI() {
     return;
   }
   
-  // 多使用者系統：不保存到 LocalStorage，直接同步到 Supabase
-  // localStorage.setItem(KI, JSON.stringify(items)); // 已停用
-  
+  // 多使用者系統：直接同步到 Supabase
   if (curUser && sb) {
     try {
       // 将前端驼峰字段映射到数据库小写字段
@@ -680,7 +674,6 @@ async function sI() {
 
 async function sM() {
   if (userRole === 'viewer') return;
-  // localStorage.setItem(KM, JSON.stringify(makers)); // 已停用
   if (curUser && sb) {
     try {
       const { error } = await sb.from('makers').upsert(makers.map(m => ({...m, user_id: curUser.id})), { onConflict: 'id' });
@@ -694,7 +687,6 @@ async function sM() {
 
 async function sC() {
   if (userRole === 'viewer') return;
-  // localStorage.setItem(KC, JSON.stringify(customers)); // 已停用
   if (curUser && sb) {
     try {
       const { error } = await sb.from('customers').upsert(customers.map(c => ({...c, user_id: curUser.id})), { onConflict: 'id' });
@@ -708,7 +700,6 @@ async function sC() {
 
 async function sA() {
   if (userRole === 'viewer') return;
-  // localStorage.setItem(KA, JSON.stringify(agents)); // 已停用
   if (curUser && sb) {
     try {
       const { error } = await sb.from('agents').upsert(agents.map(a => ({...a, user_id: curUser.id})), { onConflict: 'id' });
@@ -722,7 +713,6 @@ async function sA() {
 
 async function nkSync() {
   if (userRole === 'viewer') return;
-  // localStorage.setItem(KN, JSON.stringify(monks)); // 已停用
   if (curUser && sb) {
     try {
       const { error } = await sb.from('monks').upsert(monks.map(n => ({...n, user_id: curUser.id})), { onConflict: 'id' });
@@ -737,7 +727,6 @@ async function nkSync() {
 // 倉庫同步函數
 async function wSync() {
   if (userRole === 'viewer') return;
-  // localStorage.setItem(KW, JSON.stringify(warehouses)); // 已停用
   if (curUser && sb) {
     try {
       const { error } = await sb.from('warehouses').upsert(warehouses.map(w => ({...w, user_id: curUser.id})), { onConflict: 'id' });
@@ -2240,129 +2229,6 @@ function setFontSize(size) {
   });
   const labels = {small:'小',medium:'中',large:'大'};
   toast(`字體已設為「${labels[size]}」`, 's');
-}
-
-/* 顯示 Cloudinary 設定指南 */
-function showCloudinaryGuide() {
-  const guide = `
-☁️ Cloudinary 設定指南（25GB 免費）
-
-步驟 1：註冊帳號
-• 前往 https://cloudinary.com/users/register/free
-• 使用 Email 或 Google 帳號註冊
-
-步驟 2：取得 Cloud Name
-• 登入後在 Dashboard 左上角可見
-• 例如：demo123
-• 複製到系統設置的「Cloud Name」欄位
-
-步驟 3：設定 Upload Preset
-• 點擊 Settings ⚙️ → Upload 標籤
-• 找到 Upload presets → Add upload preset
-• Mode: Unsigned（無簽名）
-• Preset name: thangka_upload
-• Folder: thangka-images（可選）
-• 點擊 Save
-• 將 preset name 填入系統設置
-
-完成！現在上傳圖片會自動儲存到 Cloudinary。
-
-優勢：
-✅ 25GB 免費儲存（是 Supabase 的 25 倍）
-✅ 25GB 月頻寬
-✅ 自動優化圖片
-✅ CDN 全球加速
-✅ 無限圖片數量
-  `;
-  alert(guide);
-}
-
-/* 遷移圖片到 Cloudinary（自動執行） */
-async function migrateImagesToCloudinary() {
-  // 檢查是否有圖片需要遷移（Supabase URL 或 Base64）
-  const itemsWithImages = items.filter(i => 
-    i.image && (i.image.includes('supabase.co') || i.image.startsWith('data:image/'))
-  );
-  
-  if (itemsWithImages.length === 0) {
-    console.log('沒有需要遷移的圖片');
-    return;
-  }
-  
-  console.log(`開始自動遷移 ${itemsWithImages.length} 張圖片到 Cloudinary...`);
-  
-  let successCount = 0;
-  let failCount = 0;
-  const total = itemsWithImages.length;
-  
-  for (let i = 0; i < itemsWithImages.length; i++) {
-    const item = itemsWithImages[i];
-    
-    try {
-      console.log(`遷移中... (${i + 1}/${total}) - ${item.code}`);
-      
-      let blob;
-      
-      // 判斷圖片來源類型
-      if (item.image.startsWith('data:image/')) {
-        // Base64 圖片：轉換為 Blob
-        console.log(`  → 檢測到 Base64 圖片`);
-        const response = await fetch(item.image);
-        blob = await response.blob();
-      } else {
-        // Supabase URL：下載圖片
-        console.log(`  → 檢測到 Supabase 圖片`);
-        const response = await fetch(item.image);
-        blob = await response.blob();
-      }
-      
-      // 上傳到 Cloudinary
-      const formData = new FormData();
-      formData.append('file', blob, 'image.webp');
-      formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
-      formData.append('folder', 'thangka-images');
-      
-      const uploadResponse = await fetch(
-        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/image/upload`,
-        { method: 'POST', body: formData }
-      );
-      
-      const data = await uploadResponse.json();
-      
-      if (data.error) {
-        throw new Error(data.error.message);
-      }
-      
-      // 更新本地數據
-      const oldImageType = item.image.startsWith('data:image/') ? 'Base64' : 'Supabase';
-      item.image = data.secure_url;
-      successCount++;
-      
-      console.log(`✅ 成功遷移 (${oldImageType} → Cloudinary): ${item.code}`);
-      
-      // 每 5 張保存一次
-      if (successCount % 5 === 0) {
-        await sI();
-      }
-      
-    } catch (err) {
-      console.error(`❌ 遷移失敗 ${item.code}:`, err.message);
-      failCount++;
-    }
-  }
-  
-  // 最後保存
-  await sI();
-  
-  // 顯示結果
-  console.log(`遷移完成！成功: ${successCount}, 失敗: ${failCount}`);
-  
-  if (successCount > 0) {
-    toast(`已自動遷移 ${successCount} 張圖片到 Cloudinary ☁️`, 's');
-    rV(); // 重新渲染視圖
-  } else if (failCount > 0) {
-    toast(`圖片遷移失敗: ${failCount} 張`, 'e');
-  }
 }
 
 /* 手動重新同步 */
