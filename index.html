@@ -2279,8 +2279,10 @@ function showCloudinaryGuide() {
 
 /* 遷移圖片到 Cloudinary（自動執行） */
 async function migrateImagesToCloudinary() {
-  // 檢查是否有圖片需要遷移
-  const itemsWithImages = items.filter(i => i.image && i.image.includes('supabase.co'));
+  // 檢查是否有圖片需要遷移（Supabase URL 或 Base64）
+  const itemsWithImages = items.filter(i => 
+    i.image && (i.image.includes('supabase.co') || i.image.startsWith('data:image/'))
+  );
   
   if (itemsWithImages.length === 0) {
     console.log('沒有需要遷移的圖片');
@@ -2299,9 +2301,20 @@ async function migrateImagesToCloudinary() {
     try {
       console.log(`遷移中... (${i + 1}/${total}) - ${item.code}`);
       
-      // 下載圖片
-      const response = await fetch(item.image);
-      const blob = await response.blob();
+      let blob;
+      
+      // 判斷圖片來源類型
+      if (item.image.startsWith('data:image/')) {
+        // Base64 圖片：轉換為 Blob
+        console.log(`  → 檢測到 Base64 圖片`);
+        const response = await fetch(item.image);
+        blob = await response.blob();
+      } else {
+        // Supabase URL：下載圖片
+        console.log(`  → 檢測到 Supabase 圖片`);
+        const response = await fetch(item.image);
+        blob = await response.blob();
+      }
       
       // 上傳到 Cloudinary
       const formData = new FormData();
@@ -2321,10 +2334,11 @@ async function migrateImagesToCloudinary() {
       }
       
       // 更新本地數據
+      const oldImageType = item.image.startsWith('data:image/') ? 'Base64' : 'Supabase';
       item.image = data.secure_url;
       successCount++;
       
-      console.log(`✅ 成功遷移: ${item.code}`);
+      console.log(`✅ 成功遷移 (${oldImageType} → Cloudinary): ${item.code}`);
       
       // 每 5 張保存一次
       if (successCount % 5 === 0) {
