@@ -601,6 +601,9 @@ async function sI() {
     return;
   }
   
+  console.log('🔄 sI() called, syncing', items.length, 'items to Supabase');
+  console.log('👤 Current user:', curUser?.id);
+  
   // 多使用者系統：直接同步到 Supabase
   if (curUser && sb) {
     try {
@@ -632,14 +635,17 @@ async function sI() {
         deposit: i.deposit || 0,
         balance: i.balance || 0,
         balancedue: i.balanceDue || null,
-        createdat: i.created_at || new Date().toISOString(),
-        created_at: i.created_at,
+        created_at: i.created_at || new Date().toISOString(),
         user_id: curUser.id,
         warehouse: i.warehouse || ''  // 倉庫ID
       }));
-      const { error } = await sb.from('items').upsert(itemsToSync, { onConflict: 'id' });
+      
+      console.log('📤 Sending to Supabase (first 3 items):', itemsToSync.slice(0, 3));
+      
+      const { data, error } = await sb.from('items').upsert(itemsToSync, { onConflict: 'id' });
       if (error) {
-        console.error('Supabase sync error:', error);
+        console.error('❌ Supabase sync error:', error);
+        console.error('Failed to sync items:', itemsToSync);
         toast('雲端同步失敗: ' + error.message, 'e');
         // 如果同步失敗，仍然保存到 LocalStorage
         try {
@@ -650,9 +656,34 @@ async function sI() {
             toast('儲存空間不足，請減少圖片數量或大小', 'e');
           }
         }
+      } else {
+        console.log('✅ Supabase sync successful! Synced', itemsToSync.length, 'items');
+        console.log('Response data:', data);
+        
+        // 驗證：立即從 Supabase 讀取剛同步的數據
+        const testItem = itemsToSync[0];
+        if (testItem) {
+          const { data: verifyData, error: verifyError } = await sb
+            .from('items')
+            .select('id, cost, price, quantity')
+            .eq('id', testItem.id)
+            .single();
+          if (!verifyError && verifyData) {
+            console.log('🔍 Verification - DB values:', verifyData);
+            console.log(' Verification - Sent values:', { 
+              id: testItem.id, 
+              cost: testItem.cost, 
+              price: testItem.price, 
+              quantity: testItem.quantity 
+            });
+            if (verifyData.cost !== testItem.cost || verifyData.price !== testItem.price) {
+              console.warn('⚠️ WARNING: Database values do not match sent values!');
+            }
+          }
+        }
       }
     } catch (e) { 
-      console.error('sI sync error:', e); 
+      console.error('❌ sI sync error:', e); 
       toast('庫存同步失敗: ' + e.message, 'e');
       // 嘗試保存到 LocalStorage
       try {
@@ -662,6 +693,9 @@ async function sI() {
       }
     }
   } else {
+    console.warn('⚠️ No user or Supabase client, saving to LocalStorage only');
+    console.log('curUser:', curUser);
+    console.log('sb:', sb);
     // 沒有登入，只保存到 LocalStorage
     try {
       localStorage.setItem(KI, JSON.stringify(items));
@@ -2508,9 +2542,19 @@ function sIt() {
     toast('進貨成功', 's');
   }
   sS();
-  sI();
-  clM('M2');
-  rV();
+  console.log('🔍 Debug: About to sync item:', {
+    id: eid || 'NEW',
+    code: co,
+    cost: cs,
+    price: pr,
+    quantity: qty
+  });
+  // 使用 async/await 等待同步完成
+  (async () => {
+    await sI();
+    clM('M2');
+    rV();
+  })();
 }
 
 /* ===== 匯率換算功能 ===== */
