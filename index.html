@@ -2587,7 +2587,7 @@ async function sIt() {
     toast('進貨成功', 's');
   }
   sS();
-  console.log('🔍 Debug: About to sync item:', {
+  console.log(' Debug: About to sync item:', {
     id: eid || 'NEW',
     code: co,
     cost: cs,
@@ -2595,10 +2595,30 @@ async function sIt() {
     quantity: qty
   });
   
-  // 直接呼叫 sI() 並等待同步完成，不要使用非同步的 IIFE
-  await sI();
+  try {
+    // 直接呼叫 sI() 並等待同步完成
+    await sI();
+    console.log('✅ Sync completed successfully');
+  } catch (syncError) {
+    console.error(' Sync failed:', syncError);
+    toast('同步失敗，但數據已保存在本地', 'e');
+  }
+  
+  // 關閉模態框
   clM('M2');
-  rV();
+  
+  // 立即重新渲染當前視圖，顯示更新後的金額
+  if (cV === 'inventory') {
+    // 如果在庫存頁面，直接重新渲染庫存
+    console.log('🔄 Refreshing inventory view immediately...');
+    rV();
+  } else {
+    // 如果在其他頁面，也重新渲染
+    console.log('🔄 Refreshing current view...');
+    rV();
+  }
+  
+  console.log('✅ View updated with new values');
 }
 
 /* ===== 匯率換算功能 ===== */
@@ -2937,6 +2957,18 @@ document.addEventListener('keydown', e => {
 });
 
 function bE() {
+  // 先移除舊的事件監聽器，避免重複綁定
+  const removeOldListeners = () => {
+    ['iS', 'iSt', 'iRg', 'iSo', 'shS', 'shDF', 'shDT', 'rS', 'rT', 'rDF', 'rDT', 'mkS', 'mkR', 'cuS', 'agS', 'nkS', 'nkR', 'saS'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        const newEl = el.cloneNode(true);
+        el.parentNode.replaceChild(newEl, el);
+      }
+    });
+  };
+  removeOldListeners();
+  
   if (cV === 'makers') {
     const el = document.getElementById('mkS');
     if (el) el.addEventListener('input', fMk);
@@ -2978,6 +3010,13 @@ function bE() {
       const el = document.getElementById(id);
       if (el) el.addEventListener(id === 'iS' ? 'input' : 'change', fInv);
     });
+    // 也監聽進階篩選
+    const iPN = document.getElementById('iPN');
+    if (iPN) iPN.addEventListener('input', fInv);
+    const iPD = document.getElementById('iPD');
+    if (iPD) iPD.addEventListener('input', fInv);
+    const iWh = document.getElementById('iWh');
+    if (iWh) iWh.addEventListener('change', fInv);
     fInv();
   }
   if (cV === 'shipment') {
