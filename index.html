@@ -157,10 +157,49 @@
     .mhb{display:flex!important;z-index:60}
   }
   @media(display-mode:standalone){body{padding-top:env(safe-area-inset-top)}}
-  /* ---- 字體大小縮放 ---- */
-  #appWrap.sz-s{zoom:.88}
-  #appWrap.sz-m{zoom:1}
-  #appWrap.sz-l{zoom:1.30}
+  /* ---- 字體大小縮放 - 使用 CSS 變數和動態調整 ---- */
+  #appWrap {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  /* 小：所有文字縮小 */
+  #appWrap.sz-s {
+    font-size: 13px;
+  }
+  #appWrap.sz-s .ni { font-size: 11px; }
+  #appWrap.sz-s .bni { font-size: 8px; }
+  #appWrap.sz-s .sv { font-size: 20px; }
+  #appWrap.sz-s .fs { font-size: inherit; }
+  #appWrap.sz-s .fi { font-size: 11px; padding: 7px 10px; }
+  #appWrap.sz-s .fl { font-size: 9px; }
+  #appWrap.sz-s .bt { font-size: 10px; padding: 6px 10px; }
+  #appWrap.sz-s .bt-sm { font-size: 9px; padding: 3px 8px; }
+  #appWrap.sz-s .bg { font-size: 9px; }
+  #appWrap.sz-s .ic p { font-size: inherit; }
+  #appWrap.sz-s .mc { padding: 16px; }
+  
+  /* 中：正常大小 */
+  #appWrap.sz-m {
+    font-size: 14px;
+  }
+  
+  /* 大：所有文字放大 */
+  #appWrap.sz-l {
+    font-size: 16px;
+  }
+  #appWrap.sz-l .ni { font-size: 13px; }
+  #appWrap.sz-l .bni { font-size: 10px; }
+  #appWrap.sz-l .sv { font-size: 24px; }
+  #appWrap.sz-l .fs { font-size: inherit; }
+  #appWrap.sz-l .fi { font-size: 13px; padding: 9px 13px; }
+  #appWrap.sz-l .fl { font-size: 11px; }
+  #appWrap.sz-l .bt { font-size: 12px; padding: 8px 14px; }
+  #appWrap.sz-l .bt-sm { font-size: 11px; padding: 5px 10px; }
+  #appWrap.sz-l .bg { font-size: 11px; }
+  #appWrap.sz-l .ic p { font-size: inherit; }
+  #appWrap.sz-l .mc { padding: 20px; }
   /* ---- 同步載入遮罩 ---- */
   .sync-overlay{position:fixed;inset:0;background:var(--bg);z-index:1900;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .5s}
   .sync-overlay.done{opacity:0;pointer-events:none}
@@ -504,12 +543,20 @@ function applyFontSize() {
   const wrap = document.getElementById('appWrap');
   if (!wrap) return;
   const sz = S.fontSize || 'medium';
+  
+  // 切換字體大小 class
   wrap.classList.remove('sz-s', 'sz-m', 'sz-l');
   wrap.classList.add(sz === 'small' ? 'sz-s' : sz === 'large' ? 'sz-l' : 'sz-m');
+  
+  console.log(' Font size applied:', sz);
 }
 
 async function syncFromCloud() {
-  if (!curUser || !sb) return;
+  if (!curUser || !sb) {
+    console.error(' No Supabase connection');
+    return;
+  }
+  
   try {
     const steps = [
       { label: '同步唐卡庫存...', key: 'items',     table: 'items',     pct: 15 },
@@ -519,8 +566,6 @@ async function syncFromCloud() {
       { label: '同步僧人資料...', key: 'monks',     table: 'monks',     pct: 75 },
       { label: '同步倉庫資料...', key: 'warehouses',table: 'warehouses',pct: 90 },
     ];
-    const refs = { items, makers, customers, agents, monks, warehouses };
-    const setters = { items: v=>items=v, makers: v=>makers=v, customers: v=>customers=v, agents: v=>agents=v, monks: v=>monks=v, warehouses: v=>warehouses=v };
 
     for (const step of steps) {
       const stepEl = document.getElementById('syncStep');
@@ -528,81 +573,86 @@ async function syncFromCloud() {
       if (stepEl) stepEl.textContent = step.label;
       if (barEl)  barEl.style.width  = step.pct + '%';
 
-      // 抓取所有数据（权限由前端控制，而非数据隔离）
+      console.log(`🔄 Syncing ${step.table}...`);
+      
+      // 抓取所有数据
       const { data, error } = await sb.from(step.table).select('*');
-      // 只有無錯誤且有資料時才覆蓋（保留本地快取作離線備援）
-      if (!error && data) {
-        if (data.length > 0) {
-          // 將 Supabase 小寫字段映射到前端駝峰字段
-          const mappedData = data.map(item => {
-            // 只對 items 表進行字段映射
-            if (step.key === 'items') {
-              return {
-                id: item.id,
-                code: item.code,
-                image: item.image || '',
-                imageHash: item.imagehash || '',
-                region: item.region,
-                maker: item.maker,
-                painter: item.painter || '',
-                productName: item.productname || '',
-                productDescription: item.productdescription || '',
-                quantity: item.quantity || 1,
-                cost: item.cost || 0,
-                price: item.price || 0,
-                extraCost: item.extracost || 0,
-                taxIncluded: item.taxincluded || false,
-                framed: item.framed || false,
-                purchaseDate: item.purchasedate || '',
-                shipmentDate: item.shipmentdate || '',
-                shipNotes: item.shipnotes || '',
-                status: item.status || 'in-stock',
-                notes: item.notes || '',
-                custName: item.custname || '',
-                custPhone: item.custphone || '',
-                agentName: item.agentname || '',
-                deposit: item.deposit || 0,
-                balance: item.balance || 0,
-                balanceDue: item.balancedue || '',
-                created_at: item.created_at || item.createdat || new Date().toISOString(),
-                user_id: item.user_id,
-                warehouse: item.warehouse || ''
-              };
-            }
-            // 其他表直接使用原始數據
-            return item;
-          });
-          setters[step.key](mappedData);
+      
+      if (error) {
+        console.error(` Error syncing ${step.table}:`, error);
+        toast(`${step.label.replace('...', '')}失敗`, 'e');
+        continue;
+      }
+      
+      if (data) {
+        // 將 Supabase 小寫字段映射到前端駝峰字段
+        let mappedData = data;
+        if (step.key === 'items') {
+          mappedData = data.map(item => ({
+            id: item.id,
+            code: item.code,
+            image: item.image || '',
+            imageHash: item.imagehash || '',
+            region: item.region,
+            maker: item.maker,
+            painter: item.painter || '',
+            productName: item.productname || '',
+            productDescription: item.productdescription || '',
+            quantity: item.quantity || 1,
+            cost: item.cost || 0,
+            price: item.price || 0,
+            extraCost: item.extracost || 0,
+            taxIncluded: item.taxincluded || false,
+            framed: item.framed || false,
+            purchaseDate: item.purchasedate || '',
+            shipmentDate: item.shipmentdate || '',
+            shipNotes: item.shipnotes || '',
+            status: item.status || 'in-stock',
+            notes: item.notes || '',
+            custName: item.custname || '',
+            custPhone: item.custphone || '',
+            agentName: item.agentname || '',
+            deposit: item.deposit || 0,
+            balance: item.balance || 0,
+            balanceDue: item.balancedue || '',
+            created_at: item.created_at || item.createdat || new Date().toISOString(),
+            user_id: item.user_id,
+            warehouse: item.warehouse || ''
+          }));
         }
-        // 若雲端該表為空，本地也清空（避免離線舊資料誤導）
-        else setters[step.key]([]);
+        
+        // 更新全局變量
+        if (step.key === 'items') items = mappedData;
+        else if (step.key === 'makers') makers = mappedData;
+        else if (step.key === 'customers') customers = mappedData;
+        else if (step.key === 'agents') agents = mappedData;
+        else if (step.key === 'monks') monks = mappedData;
+        else if (step.key === 'warehouses') warehouses = mappedData;
+        
+        console.log(`✅ ${step.table} synced: ${mappedData.length} records`);
+      } else {
+        // 雲端為空，清空本地數據
+        if (step.key === 'items') items = [];
+        else if (step.key === 'makers') makers = [];
+        else if (step.key === 'customers') customers = [];
+        else if (step.key === 'agents') agents = [];
+        else if (step.key === 'monks') monks = [];
+        else if (step.key === 'warehouses') warehouses = [];
+        console.log(`ℹ️ ${step.table} is empty`);
       }
     }
 
-    // 更新本地快取
-    saveAllToLocal();
+    console.log('✅ All data synced from Supabase');
   } catch (e) {
-    console.error('Sync error:', e);
-    toast('同步失敗，使用本地快取', 'i');
+    console.error(' Sync error:', e);
+    toast('同步失敗: ' + e.message, 'e');
   }
 }
 
 function saveAllToLocal() {
-  // 保存所有業務數據到 LocalStorage，作為離線備援和快速載入
-  try {
-    localStorage.setItem(KI, JSON.stringify(items));
-    localStorage.setItem(KM, JSON.stringify(makers));
-    localStorage.setItem(KC, JSON.stringify(customers));
-    localStorage.setItem(KA, JSON.stringify(agents));
-    localStorage.setItem(KN, JSON.stringify(monks));
-    localStorage.setItem(KW, JSON.stringify(warehouses));
-    console.log('✅ All data saved to LocalStorage');
-  } catch (e) {
-    console.error('LocalStorage save error:', e);
-    if (e.name === 'QuotaExceededError') {
-      console.warn('LocalStorage quota exceeded, some data may not be saved');
-    }
-  }
+  // 已移除 LocalStorage 功能，僅使用 Supabase 進行數據同步
+  // 避免 LocalStorage 空間不足導致的錯誤
+  console.log('ℹ️ LocalStorage disabled, using Supabase only');
 }
 
 // 同步至 Supabase - 使用数据库实际字段名（小写无驼峰）
@@ -616,7 +666,7 @@ async function sI() {
   console.log('🔄 sI() called, syncing', items.length, 'items to Supabase');
   console.log('👤 Current user:', curUser?.id);
   
-  // 多使用者系統：直接同步到 Supabase
+  // 僅使用 Supabase 同步，移除 LocalStorage
   if (curUser && sb) {
     try {
       // 将前端驼峰字段映射到数据库小写字段
@@ -652,7 +702,7 @@ async function sI() {
         warehouse: i.warehouse || ''  // 倉庫ID
       }));
       
-      console.log('📤 Sending to Supabase:', itemsToSync.length, 'items');
+      console.log(' Sending to Supabase:', itemsToSync.length, 'items');
       console.log('📦 Sample item (first):', itemsToSync[0]);
       
       const { data, error } = await sb.from('items').upsert(itemsToSync, { onConflict: 'id' });
@@ -660,16 +710,6 @@ async function sI() {
         console.error('❌ Supabase sync error:', error);
         console.error('Failed to sync items:', itemsToSync);
         toast('雲端同步失敗: ' + error.message, 'e');
-        // 如果同步失敗，仍然保存到 LocalStorage
-        try {
-          localStorage.setItem(KI, JSON.stringify(items));
-          console.log('✅ Saved to LocalStorage as fallback');
-        } catch (localErr) {
-          console.error('LocalStorage save error:', localErr);
-          if (localErr.name === 'QuotaExceededError') {
-            toast('儲存空間不足，請減少圖片數量或大小', 'e');
-          }
-        }
       } else {
         console.log('✅ Supabase sync successful! Synced', itemsToSync.length, 'items');
         console.log('Response data:', data);
@@ -696,39 +736,14 @@ async function sI() {
             }
           }
         }
-        
-        // 同步成功後，保存到 LocalStorage 作為備援
-        try {
-          localStorage.setItem(KI, JSON.stringify(items));
-          console.log('✅ Backup saved to LocalStorage');
-        } catch (localErr) {
-          console.error('LocalStorage backup error:', localErr);
-        }
       }
     } catch (e) { 
       console.error('❌ sI sync error:', e); 
       toast('庫存同步失敗: ' + e.message, 'e');
-      // 嘗試保存到 LocalStorage
-      try {
-        localStorage.setItem(KI, JSON.stringify(items));
-      } catch (localErr) {
-        console.error('LocalStorage fallback error:', localErr);
-      }
     }
   } else {
-    console.warn('⚠️ No user or Supabase client, saving to LocalStorage only');
-    console.log('curUser:', curUser);
-    console.log('sb:', sb);
-    // 沒有登入，只保存到 LocalStorage
-    try {
-      localStorage.setItem(KI, JSON.stringify(items));
-      console.log('✅ Saved to LocalStorage (no Supabase connection)');
-    } catch (e) {
-      console.error('LocalStorage save error:', e);
-      if (e.name === 'QuotaExceededError') {
-        toast('儲存空間不足，請清理舊數據', 'e');
-      }
-    }
+    console.error(' No Supabase connection available');
+    toast('請先登入系統', 'e');
   }
 }
 
@@ -855,13 +870,15 @@ function sS() {
   localStorage.setItem(KS, JSON.stringify(S));
 }
 function lD() {
-  try { items = JSON.parse(localStorage.getItem(KI)) || []; } catch (e) { items = []; }
-  try { makers = JSON.parse(localStorage.getItem(KM)) || []; } catch (e) { makers = []; }
-  try { customers = JSON.parse(localStorage.getItem(KC)) || []; } catch (e) { customers = []; }
-  try { agents = JSON.parse(localStorage.getItem(KA)) || []; } catch (e) { agents = []; }
-  try { monks = JSON.parse(localStorage.getItem(KN)) || []; } catch (e) { monks = []; }
-  try { warehouses = JSON.parse(localStorage.getItem(KW)) || []; } catch (e) { warehouses = []; }
+  // 已移除 LocalStorage 讀取功能，所有數據從 Supabase 載入
+  items = [];
+  makers = [];
+  customers = [];
+  agents = [];
+  monks = [];
+  warehouses = [];
   S = gS();
+  console.log('ℹ️ Local storage disabled, all data will be loaded from Supabase');
 }
 // 刪除重複的 sI(), sM(), sC(), sA(), nkSync() 定義
 // 使用第542-602行的版本（有 Supabase 同步功能）
@@ -2587,6 +2604,14 @@ async function sIt() {
     toast('進貨成功', 's');
   }
   sS();
+  
+  // 檢查 Supabase 連接狀態
+  if (!checkSupabaseStatus()) {
+    toast('請先登入系統', 'e');
+    clM('M2');
+    return;
+  }
+  
   console.log(' Debug: About to sync item:', {
     id: eid || 'NEW',
     code: co,
@@ -2597,28 +2622,24 @@ async function sIt() {
   
   try {
     // 直接呼叫 sI() 並等待同步完成
+    console.log(' Starting Supabase sync...');
     await sI();
     console.log('✅ Sync completed successfully');
+    
+    // 同步成功後，立即刷新畫面
+    await refreshCurrentView();
+    
   } catch (syncError) {
     console.error(' Sync failed:', syncError);
-    toast('同步失敗，但數據已保存在本地', 'e');
+    toast('同步失敗: ' + syncError.message, 'e');
+    // 即使同步失敗，也嘗試刷新本地畫面
+    await refreshCurrentView();
   }
   
   // 關閉模態框
   clM('M2');
   
-  // 立即重新渲染當前視圖，顯示更新後的金額
-  if (cV === 'inventory') {
-    // 如果在庫存頁面，直接重新渲染庫存
-    console.log('🔄 Refreshing inventory view immediately...');
-    rV();
-  } else {
-    // 如果在其他頁面，也重新渲染
-    console.log('🔄 Refreshing current view...');
-    rV();
-  }
-  
-  console.log('✅ View updated with new values');
+  console.log('✅ Item edit completed');
 }
 
 /* ===== 匯率換算功能 ===== */
@@ -3048,7 +3069,31 @@ function bE() {
   }
 }
 
-initD(); // 空殼，已無作用，保留避免報錯
+// 全局數據刷新函數，確保數據變更後立即更新畫面
+async function refreshCurrentView() {
+  console.log('🔄 Refreshing current view:', cV);
+  
+  // 等待一小段時間確保數據已更新
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  // 重新渲染當前視圖
+  rV();
+  
+  console.log('✅ View refreshed');
+}
+
+// 全局 Supabase 狀態檢查
+function checkSupabaseStatus() {
+  if (!curUser) {
+    console.warn('️ User not logged in');
+    return false;
+  }
+  if (!sb) {
+    console.error('❌ Supabase client not initialized');
+    return false;
+  }
+  return true;
+}
 checkSession();
 </script>
 </div><!-- /appWrap -->
