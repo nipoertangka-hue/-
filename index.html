@@ -591,7 +591,7 @@ async function syncFromCloud() {
           mappedData = data.map(item => ({
             id: item.id,
             code: item.code,
-            image: item.image || '',
+            image: item.image || '', // 只保存 URL，如果是 base64 則會在頁面載入時處理
             imageHash: item.imagehash || '',
             region: item.region,
             maker: item.maker,
@@ -619,6 +619,12 @@ async function syncFromCloud() {
             user_id: item.user_id,
             warehouse: item.warehouse || ''
           }));
+          
+          // 檢查是否有 base64 圖片數據，如果有則警告
+          const base64Images = mappedData.filter(item => item.image && item.image.startsWith('data:'));
+          if (base64Images.length > 0) {
+            console.warn(`⚠️ Found ${base64Images.length} items with base64 images. Consider uploading them to Cloudinary/Supabase Storage to reduce database size.`);
+          }
         }
         
         // 更新全局變量
@@ -670,10 +676,11 @@ async function sI() {
   if (curUser && sb) {
     try {
       // 将前端驼峰字段映射到数据库小写字段
+      // 注意：不要同步 base64 图片数据，只同步 URL
       const itemsToSync = items.map(i => ({
         id: i.id,
         code: i.code,
-        image: i.image || '',
+        image: (i.image && i.image.startsWith('http')) ? i.image : '', // 只同步 URL，不同步 base64
         imagehash: i.imageHash || '',
         region: i.region,
         maker: i.maker,
@@ -703,19 +710,46 @@ async function sI() {
       }));
       
       console.log(' Sending to Supabase:', itemsToSync.length, 'items');
-      console.log('📦 Sample item (first):', itemsToSync[0]);
       
-      const { data, error } = await sb.from('items').upsert(itemsToSync, { onConflict: 'id' });
-      if (error) {
-        console.error('❌ Supabase sync error:', error);
-        console.error('Failed to sync items:', itemsToSync);
-        toast('雲端同步失敗: ' + error.message, 'e');
+      // 优化：如果数据量超过 50 条，分批次同步避免超时
+      const BATCH_SIZE = 50;
+      let successCount = 0;
+      
+      if (itemsToSync.length > BATCH_SIZE) {
+        console.log(' Data too large, syncing in batches...');
+        for (let i = 0; i < itemsToSync.length; i += BATCH_SIZE) {
+          const batch = itemsToSync.slice(i, i + BATCH_SIZE);
+          console.log(`🔄 Syncing batch ${Math.floor(i/BATCH_SIZE) + 1}: ${batch.length} items`);
+          
+          const { data, error } = await sb.from('items').upsert(batch, { onConflict: 'id' });
+          if (error) {
+            console.error(`❌ Batch ${Math.floor(i/BATCH_SIZE) + 1} sync error:`, error);
+            toast(`批次 ${Math.floor(i/BATCH_SIZE) + 1} 同步失敗: ` + error.message, 'e');
+          } else {
+            successCount += batch.length;
+            console.log(`✅ Batch ${Math.floor(i/BATCH_SIZE) + 1} synced successfully`);
+          }
+          
+          // 批次间稍微延迟，避免请求过频
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
       } else {
-        console.log('✅ Supabase sync successful! Synced', itemsToSync.length, 'items');
-        console.log('Response data:', data);
-        
-        // 驗證：隨機抽取3個項目驗證同步是否成功
-        const sampleItems = itemsToSync.slice(0, 3);
+        // 数据量小，一次性同步
+        const { data, error } = await sb.from('items').upsert(itemsToSync, { onConflict: 'id' });
+        if (error) {
+          console.error(' Supabase sync error:', error);
+          console.error('Failed to sync items:', itemsToSync);
+          toast('雲端同步失敗: ' + error.message, 'e');
+          return;
+        }
+        successCount = itemsToSync.length;
+      }
+      
+      console.log(`✅ Supabase sync successful! Synced ${successCount}/${itemsToSync.length} items`);
+      
+      // 驗證：隨機抽取3個項目驗證同步是否成功
+      if (successCount > 0) {
+        const sampleItems = itemsToSync.slice(0, Math.min(3, itemsToSync.length));
         for (const testItem of sampleItems) {
           const { data: verifyData, error: verifyError } = await sb
             .from('items')
