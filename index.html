@@ -588,9 +588,21 @@ async function syncFromCloud() {
 }
 
 function saveAllToLocal() {
-  // 多使用者系統：不保存業務數據到 LocalStorage，避免數據不一致
-  // 只保留設定數據（字體大小等）
-  // items, makers, customers, agents, monks, warehouses 永遠從 Supabase 載入
+  // 保存所有業務數據到 LocalStorage，作為離線備援和快速載入
+  try {
+    localStorage.setItem(KI, JSON.stringify(items));
+    localStorage.setItem(KM, JSON.stringify(makers));
+    localStorage.setItem(KC, JSON.stringify(customers));
+    localStorage.setItem(KA, JSON.stringify(agents));
+    localStorage.setItem(KN, JSON.stringify(monks));
+    localStorage.setItem(KW, JSON.stringify(warehouses));
+    console.log('✅ All data saved to LocalStorage');
+  } catch (e) {
+    console.error('LocalStorage save error:', e);
+    if (e.name === 'QuotaExceededError') {
+      console.warn('LocalStorage quota exceeded, some data may not be saved');
+    }
+  }
 }
 
 // 同步至 Supabase - 使用数据库实际字段名（小写无驼峰）
@@ -640,7 +652,8 @@ async function sI() {
         warehouse: i.warehouse || ''  // 倉庫ID
       }));
       
-      console.log('📤 Sending to Supabase (first 3 items):', itemsToSync.slice(0, 3));
+      console.log('📤 Sending to Supabase:', itemsToSync.length, 'items');
+      console.log('📦 Sample item (first):', itemsToSync[0]);
       
       const { data, error } = await sb.from('items').upsert(itemsToSync, { onConflict: 'id' });
       if (error) {
@@ -650,6 +663,7 @@ async function sI() {
         // 如果同步失敗，仍然保存到 LocalStorage
         try {
           localStorage.setItem(KI, JSON.stringify(items));
+          console.log('✅ Saved to LocalStorage as fallback');
         } catch (localErr) {
           console.error('LocalStorage save error:', localErr);
           if (localErr.name === 'QuotaExceededError') {
@@ -660,26 +674,35 @@ async function sI() {
         console.log('✅ Supabase sync successful! Synced', itemsToSync.length, 'items');
         console.log('Response data:', data);
         
-        // 驗證：立即從 Supabase 讀取剛同步的數據
-        const testItem = itemsToSync[0];
-        if (testItem) {
+        // 驗證：隨機抽取3個項目驗證同步是否成功
+        const sampleItems = itemsToSync.slice(0, 3);
+        for (const testItem of sampleItems) {
           const { data: verifyData, error: verifyError } = await sb
             .from('items')
-            .select('id, cost, price, quantity')
+            .select('id, code, cost, price, quantity')
             .eq('id', testItem.id)
             .single();
           if (!verifyError && verifyData) {
-            console.log('🔍 Verification - DB values:', verifyData);
-            console.log(' Verification - Sent values:', { 
-              id: testItem.id, 
-              cost: testItem.cost, 
-              price: testItem.price, 
-              quantity: testItem.quantity 
+            console.log('🔍 Verification:', {
+              id: verifyData.id,
+              code: verifyData.code,
+              sent: { cost: testItem.cost, price: testItem.price, quantity: testItem.quantity },
+              received: { cost: verifyData.cost, price: verifyData.price, quantity: verifyData.quantity },
+              match: verifyData.cost === testItem.cost && verifyData.price === testItem.price && verifyData.quantity === testItem.quantity
             });
             if (verifyData.cost !== testItem.cost || verifyData.price !== testItem.price) {
               console.warn('⚠️ WARNING: Database values do not match sent values!');
+              toast('同步驗證失敗，請檢查網絡連接', 'e');
             }
           }
+        }
+        
+        // 同步成功後，保存到 LocalStorage 作為備援
+        try {
+          localStorage.setItem(KI, JSON.stringify(items));
+          console.log('✅ Backup saved to LocalStorage');
+        } catch (localErr) {
+          console.error('LocalStorage backup error:', localErr);
         }
       }
     } catch (e) { 
@@ -699,6 +722,7 @@ async function sI() {
     // 沒有登入，只保存到 LocalStorage
     try {
       localStorage.setItem(KI, JSON.stringify(items));
+      console.log('✅ Saved to LocalStorage (no Supabase connection)');
     } catch (e) {
       console.error('LocalStorage save error:', e);
       if (e.name === 'QuotaExceededError') {
@@ -2471,7 +2495,7 @@ document.addEventListener('change', function (e) {
     }
   }
 });
-function sIt() {
+async function sIt() {
   const eid = document.getElementById('eId').value,
     co = document.getElementById('fCo').value.trim(),
     rg = document.getElementById('fRg').value,
@@ -2500,6 +2524,9 @@ function sIt() {
     // 編輯模式
     const i = items.findIndex(x => x.id === eid);
     if (i !== -1) {
+      console.log(' Editing item:', { id: eid, code: items[i].code, oldCost: items[i].cost, oldPrice: items[i].price });
+      console.log('📝 New values:', { code: co, cost: cs, price: pr, quantity: qty });
+      
       // 如果 curImg 為空，表示沒有上傳新圖片，保持原圖片
       const finalImage = curImg || items[i].image;
       const finalHash = curHash !== null ? curHash : items[i].imageHash;
@@ -2522,8 +2549,26 @@ function sIt() {
         framed: fr,
         purchaseDate: pd,
         notes: nt,
-        warehouse: wh
+        warehouse: wh,
+        // 確保出貨相關字段不會被清空
+        shipmentDate: items[i].shipmentDate,
+        shipNotes: items[i].shipNotes,
+        status: items[i].status,
+        custName: items[i].custName,
+        custPhone: items[i].custPhone,
+        agentName: items[i].agentName,
+        deposit: items[i].deposit,
+        balance: items[i].balance,
+        balanceDue: items[i].balanceDue
       };
+      
+      console.log('✅ Item updated in memory:', {
+        id: items[i].id,
+        code: items[i].code,
+        cost: items[i].cost,
+        price: items[i].price,
+        quantity: items[i].quantity
+      });
     }
     toast('已更新', 's');
   } else {
@@ -2549,12 +2594,11 @@ function sIt() {
     price: pr,
     quantity: qty
   });
-  // 使用 async/await 等待同步完成
-  (async () => {
-    await sI();
-    clM('M2');
-    rV();
-  })();
+  
+  // 直接呼叫 sI() 並等待同步完成，不要使用非同步的 IIFE
+  await sI();
+  clM('M2');
+  rV();
 }
 
 /* ===== 匯率換算功能 ===== */
