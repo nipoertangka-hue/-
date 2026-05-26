@@ -311,7 +311,11 @@
           </button>
           <h2 class="fs text-sm font-bold ml-1" id="VT">儀表板</h2>
         </div>
-        <div class="flex items-center gap-1.5" id="HA"></div>
+        <div class="flex items-center gap-1.5" id="HA">
+          <button class="w-8 h-8 rounded-lg flex items-center justify-center text-gold-700 hover:bg-gold-500/10 transition-colors" onclick="clearAllCache()" title="清除緩存">
+            <span class="material-icons-outlined text-sm">refresh</span>
+          </button>
+        </div>
       </header>
       <div class="mc" id="MC"></div>
     </main>
@@ -879,18 +883,27 @@ if ('serviceWorker' in navigator) {
       const newWorker = reg.installing;
       newWorker.addEventListener('statechange', () => {
         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-          // 有新版本可用，提示用戶刷新
-          if (confirm('系統已更新，是否立即重新載入？')) {
-            window.location.reload();
-          }
+          // 有新版本可用，強制刷新頁面
+          console.log('🔄 檢測到新版本，正在刷新...');
+          window.location.reload(true);
         }
       });
     });
   }).catch(() => {});
   
-  // 每次載入時嘗試更新 Service Worker
+  // 每次載入時嘗試更新 Service Worker 並清除舊緩存
   if (navigator.serviceWorker.controller) {
-    navigator.serviceWorker.ready.then(reg => reg.update());
+    navigator.serviceWorker.ready.then(reg => {
+      reg.update();
+      // 清除所有舊緩存
+      caches.keys().then(names => {
+        names.forEach(name => {
+          if (name !== 'tk5') {
+            caches.delete(name);
+          }
+        });
+      });
+    });
   }
 }
 
@@ -3007,6 +3020,35 @@ function togSB() {
   document.getElementById('SB').classList.toggle('open');
   document.getElementById('SBB').classList.toggle('show');
 }
+
+// 清除所有緩存並刷新頁面
+function clearAllCache() {
+  if (confirm('確定要清除所有緩存並重新載入嗎？\n\n這將清除：\n- Service Worker 緩存\n- 瀏覽器緩存\n- 本地存儲\n\n頁面將自動刷新。')) {
+    // 1. 清除 Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        registrations.forEach(reg => reg.unregister());
+      });
+    }
+    
+    // 2. 清除所有 Cache Storage
+    caches.keys().then(names => {
+      names.forEach(name => caches.delete(name));
+    });
+    
+    // 3. 清除 LocalStorage 和 SessionStorage
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // 4. 強制刷新頁面
+    setTimeout(() => {
+      window.location.reload(true);
+    }, 500);
+    
+    toast('正在清除緩存...', 'i');
+  }
+}
+
 function toast(msg, type = 'i') {
   const c = document.getElementById('TC');
   const t = document.createElement('div');
