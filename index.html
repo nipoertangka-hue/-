@@ -617,7 +617,10 @@ async function syncFromCloud() {
             balanceDue: item.balancedue || '',
             created_at: item.created_at || item.createdat || new Date().toISOString(),
             user_id: item.user_id,
-            warehouse: item.warehouse || ''
+            warehouse: item.warehouse || '',
+            length: item.length || null,
+            width: item.width || null,
+            height: item.height || null
           }));
           
           // 檢查是否有 base64 圖片數據，如果有則警告
@@ -676,11 +679,11 @@ async function sI() {
   if (curUser && sb) {
     try {
       // 将前端驼峰字段映射到数据库小写字段
-      // 注意：不要同步 base64 图片数据，只同步 URL
+      // 注意：不要同步超大的 base64 图片数据，但保留本地数据
       const itemsToSync = items.map(i => ({
         id: i.id,
         code: i.code,
-        image: (i.image && i.image.startsWith('http')) ? i.image : '', // 只同步 URL，不同步 base64
+        image: i.image || '', // 保留所有圖片數據（URL 或 base64）
         imagehash: i.imageHash || '',
         region: i.region,
         maker: i.maker,
@@ -706,7 +709,10 @@ async function sI() {
         balancedue: i.balanceDue || null,
         created_at: i.created_at || new Date().toISOString(),
         user_id: curUser.id,
-        warehouse: i.warehouse || ''  // 倉庫ID
+        warehouse: i.warehouse || '',  // 倉庫ID
+        length: i.length || null,
+        width: i.width || null,
+        height: i.height || null
       }));
       
       console.log(' Sending to Supabase:', itemsToSync.length, 'items');
@@ -2522,12 +2528,12 @@ function oAI(eid){
     const item = items.find(i => i.id === eid);
     if (!item) return;
     document.getElementById('M2T').textContent='編輯唐卡';
-    document.getElementById('M2B').innerHTML=`<input type="hidden" id="eId" value="${eid}"><div class="mb-3"><label class="fl">唐卡圖片</label><div class="uz" id="uZ" onclick="document.getElementById('fImg').click()"><div id="uH"><span class="material-icons-outlined text-2xl text-gold-800 mb-0.5 block">add_photo_alternate</span><p class="text-[10px] text-gold-700">點擊更換</p></div><img id="uP" class="${item.image?'':'hidden'} max-h-40 mx-auto rounded-lg" src="${item.image||''}"></div><input type="file" id="fImg" accept="image/*" class="hidden" onchange="hIU(event)"></div><div class="grid grid-cols-2 gap-2.5"><div><label class="fl">編號 *</label><input type="text" id="fCo" class="fi" value="${item.code}"></div><div><label class="fl">地區 *</label><select id="fRg" class="fi"><option value="">選擇</option>${REGIONS.map(r=>`<option value="${r}" ${item.region===r?'selected':''}>${r}</option>`).join('')}</select></div><div class="col-span-2"><label class="fl">產品名稱</label><input type="text" id="fPN" class="fi" placeholder="例：綠度母唐卡、文殊菩薩" value="${item.productName||''}"></div><div class="col-span-2"><label class="fl">商品描述</label><textarea id="fPD2" class="fi" rows="2" placeholder="尺寸、材質、工藝等詳細描述">${item.productDescription||''}</textarea></div><div class="col-span-2"><label class="fl">畫師名稱</label><input type="text" id="fPt" class="fi" placeholder="自訂輸入畫師名稱" value="${item.painter||''}"></div><div class="col-span-2"><label class="fl">來源廠家 *</label><input type="text" id="fMk" class="fi" list="mkDL" placeholder="輸入或選擇" value="${item.maker}"><datalist id="mkDL">${makers.map(m=>`<option value="${m.name}">`).join('')}</datalist></div><div><label class="fl">數量 *</label><input type="number" id="fQty" class="fi" min="1" inputmode="numeric" value="${item.quantity||1}" placeholder="預設 1"></div>${fxPanelHTML(item.cost)}<div><label class="fl">成本 * <span class="text-gold-800 font-normal">（台幣 NT$）</span></label><input type="number" id="fCs" class="fi" min="0" inputmode="numeric" value="${item.cost}" placeholder="可由上方換算帶入"></div><div><label class="fl">額外成本</label><input type="number" id="fEc" class="fi" value="${item.extraCost||0}" min="0" inputmode="numeric" title="稅費、框成本、運費等"></div><div><label class="fl">售價 *</label><input type="number" id="fPr" class="fi" min="0" inputmode="numeric" value="${item.price}"></div><div><label class="fl">含稅</label><select id="fTx" class="fi"><option value="yes" ${item.taxIncluded?'selected':''}>含稅</option><option value="no" ${!item.taxIncluded?'selected':''}>未含稅</option></select></div><div><label class="fl">含框</label><select id="fFr" class="fi"><option value="no" ${!item.framed?'selected':''}>無框</option><option value="yes" ${item.framed?'selected':''}>含框</option></select></div><div><label class="fl">進貨日期 *</label><input type="date" id="fPD" class="fi" value="${item.purchaseDate||''}"></div><div><label class="fl">倉庫</label><select id="fWh" class="fi"><option value="">未指定</option>${warehouses.map(w=>`<option value="${w.id}" ${item.warehouse===w.id?'selected':''}>${w.name}</option>`).join('')}</select></div><div><label class="fl">備註</label><input type="text" id="fNt" class="fi" value="${item.notes||''}"></div></div><div class="flex justify-end gap-2 mt-4 pb-2"><button class="bt bt-o" onclick="clM('M2')">取消</button><button class="bt bt-g" onclick="sIt()"><span class="material-icons-outlined text-xs">save</span>儲存</button></div>`;
+    document.getElementById('M2B').innerHTML=`<input type="hidden" id="eId" value="${eid}"><div class="mb-3"><label class="fl">唐卡圖片</label><div class="uz" id="uZ" onclick="document.getElementById('fImg').click()"><div id="uH"><span class="material-icons-outlined text-2xl text-gold-800 mb-0.5 block">add_photo_alternate</span><p class="text-[10px] text-gold-700">點擊更換</p></div><img id="uP" class="${item.image?'':'hidden'} max-h-40 mx-auto rounded-lg" src="${item.image||''}"></div><input type="file" id="fImg" accept="image/*" class="hidden" onchange="hIU(event)"></div><div class="grid grid-cols-2 gap-2.5"><div><label class="fl">編號 *</label><input type="text" id="fCo" class="fi" value="${item.code}"></div><div><label class="fl">地區 *</label><select id="fRg" class="fi"><option value="">選擇</option>${REGIONS.map(r=>`<option value="${r}" ${item.region===r?'selected':''}>${r}</option>`).join('')}</select></div><div class="col-span-2"><label class="fl">產品名稱</label><input type="text" id="fPN" class="fi" placeholder="例：綠度母唐卡、文殊菩薩" value="${item.productName||''}"></div><div class="col-span-2"><label class="fl">商品描述</label><textarea id="fPD2" class="fi" rows="2" placeholder="尺寸、材質、工藝等詳細描述">${item.productDescription||''}</textarea></div><div class="col-span-2"><label class="fl">畫師名稱</label><input type="text" id="fPt" class="fi" placeholder="自訂輸入畫師名稱" value="${item.painter||''}"></div><div class="col-span-2"><label class="fl">來源廠家 *</label><input type="text" id="fMk" class="fi" list="mkDL" placeholder="輸入或選擇" value="${item.maker}"><datalist id="mkDL">${makers.map(m=>`<option value="${m.name}">`).join('')}</datalist></div><div><label class="fl">數量 *</label><input type="number" id="fQty" class="fi" min="1" inputmode="numeric" value="${item.quantity||1}" placeholder="預設 1"></div>${fxPanelHTML(item.cost)}<div><label class="fl">成本 * <span class="text-gold-800 font-normal">（台幣 NT$）</span></label><input type="number" id="fCs" class="fi" min="0" inputmode="numeric" value="${item.cost}" placeholder="可由上方換算帶入"></div><div><label class="fl">額外成本</label><input type="number" id="fEc" class="fi" value="${item.extraCost||0}" min="0" inputmode="numeric" title="稅費、框成本、運費等"></div><div><label class="fl">售價 *</label><input type="number" id="fPr" class="fi" min="0" inputmode="numeric" value="${item.price}"></div><div><label class="fl">含稅</label><select id="fTx" class="fi"><option value="yes" ${item.taxIncluded?'selected':''}>含稅</option><option value="no" ${!item.taxIncluded?'selected':''}>未含稅</option></select></div><div><label class="fl">含框</label><select id="fFr" class="fi"><option value="no" ${!item.framed?'selected':''}>無框</option><option value="yes" ${item.framed?'selected':''}>含框</option></select></div><div><label class="fl">進貨日期 *</label><input type="date" id="fPD" class="fi" value="${item.purchaseDate||''}"></div><div><label class="fl">倉庫</label><select id="fWh" class="fi"><option value="">未指定</option>${warehouses.map(w=>`<option value="${w.id}" ${item.warehouse===w.id?'selected':''}>${w.name}</option>`).join('')}</select></div><div class="col-span-2 grid grid-cols-3 gap-2"><div><label class="fl">長 (cm)</label><input type="number" id="fLength" class="fi" min="0" step="0.1" value="${item.length||''}" placeholder="長"></div><div><label class="fl">寬 (cm)</label><input type="number" id="fWidth" class="fi" min="0" step="0.1" value="${item.width||''}" placeholder="寬"></div><div><label class="fl">高 (cm)</label><input type="number" id="fHeight" class="fi" min="0" step="0.1" value="${item.height||''}" placeholder="高"></div></div><div><label class="fl">備註</label><input type="text" id="fNt" class="fi" value="${item.notes||''}"></div></div><div class="flex justify-end gap-2 mt-4 pb-2"><button class="bt bt-o" onclick="clM('M2')">取消</button><button class="bt bt-g" onclick="sIt()"><span class="material-icons-outlined text-xs">save</span>儲存</button></div>`;
     curImg=item.image||'';curHash=item.imageHash||null;
   } else {
     // 新增模式
     document.getElementById('M2T').textContent='新增唐卡進貨';
-    document.getElementById('M2B').innerHTML=`<input type="hidden" id="eId" value=""><div class="mb-3"><label class="fl">唐卡圖片</label><div class="uz" id="uZ" onclick="document.getElementById('fImg').click()"><div id="uH"><span class="material-icons-outlined text-2xl text-gold-800 mb-0.5 block">add_photo_alternate</span><p class="text-[10px] text-gold-700">點擊上傳</p></div><img id="uP" class="hidden max-h-40 mx-auto rounded-lg"></div><input type="file" id="fImg" accept="image/*" class="hidden" onchange="hIU(event)"></div><div class="grid grid-cols-2 gap-2.5"><div><label class="fl">編號 *</label><input type="text" id="fCo" class="fi" value="${gCode()}"></div><div><label class="fl">地區 *</label><select id="fRg" class="fi"><option value="">選擇</option>${REGIONS.map(r=>`<option value="${r}" ${S.defRegion===r?'selected':''}>${r}</option>`).join('')}</select></div><div class="col-span-2"><label class="fl">產品名稱</label><input type="text" id="fPN" class="fi" placeholder="例：綠度母唐卡、文殊菩薩"></div><div class="col-span-2"><label class="fl">商品描述</label><textarea id="fPD2" class="fi" rows="2" placeholder="尺寸、材質、工藝等詳細描述"></textarea></div><div class="col-span-2"><label class="fl">畫師名稱</label><input type="text" id="fPt" class="fi" placeholder="自訂輸入畫師名稱"></div><div class="col-span-2"><label class="fl">來源廠家 *</label><input type="text" id="fMk" class="fi" list="mkDL" placeholder="輸入或選擇"><datalist id="mkDL">${makers.map(m=>`<option value="${m.name}">`).join('')}</datalist></div><div><label class="fl">數量 *</label><input type="number" id="fQty" class="fi" min="1" inputmode="numeric" value="1" placeholder="預設 1"></div>${fxPanelHTML('')}<div><label class="fl">成本 * <span class="text-gold-800 font-normal">（台幣 NT$）</span></label><input type="number" id="fCs" class="fi" min="0" inputmode="numeric" placeholder="可由上方換算帶入"></div><div><label class="fl">額外成本</label><input type="number" id="fEc" class="fi" value="0" min="0" inputmode="numeric" title="稅費、框成本、運費等"></div><div><label class="fl">售價 *</label><input type="number" id="fPr" class="fi" min="0" inputmode="numeric"></div><div><label class="fl">含稅</label><select id="fTx" class="fi"><option value="yes" ${S.defTax?'selected':''}>含稅</option><option value="no" ${!S.defTax?'selected':''}>未含稅</option></select></div><div><label class="fl">含框</label><select id="fFr" class="fi"><option value="no" ${!S.defFrame?'selected':''}>無框</option><option value="yes" ${S.defFrame?'selected':''}>含框</option></select></div><div><label class="fl">進貨日期 *</label><input type="date" id="fPD" class="fi" value="${new Date().toISOString().split('T')[0]}"></div><div><label class="fl">倉庫</label><select id="fWh" class="fi"><option value="">未指定</option>${warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}</select></div><div><label class="fl">備註</label><input type="text" id="fNt" class="fi"></div></div><div class="flex justify-end gap-2 mt-4 pb-2"><button class="bt bt-o" onclick="clM('M2')">取消</button><button class="bt bt-g" onclick="sIt()"><span class="material-icons-outlined text-xs">save</span>儲存</button></div>`;
+    document.getElementById('M2B').innerHTML=`<input type="hidden" id="eId" value=""><div class="mb-3"><label class="fl">唐卡圖片</label><div class="uz" id="uZ" onclick="document.getElementById('fImg').click()"><div id="uH"><span class="material-icons-outlined text-2xl text-gold-800 mb-0.5 block">add_photo_alternate</span><p class="text-[10px] text-gold-700">點擊上傳</p></div><img id="uP" class="hidden max-h-40 mx-auto rounded-lg"></div><input type="file" id="fImg" accept="image/*" class="hidden" onchange="hIU(event)"></div><div class="grid grid-cols-2 gap-2.5"><div><label class="fl">編號 *</label><input type="text" id="fCo" class="fi" value="${gCode()}"></div><div><label class="fl">地區 *</label><select id="fRg" class="fi"><option value="">選擇</option>${REGIONS.map(r=>`<option value="${r}" ${S.defRegion===r?'selected':''}>${r}</option>`).join('')}</select></div><div class="col-span-2"><label class="fl">產品名稱</label><input type="text" id="fPN" class="fi" placeholder="例：綠度母唐卡、文殊菩薩"></div><div class="col-span-2"><label class="fl">商品描述</label><textarea id="fPD2" class="fi" rows="2" placeholder="尺寸、材質、工藝等詳細描述"></textarea></div><div class="col-span-2"><label class="fl">畫師名稱</label><input type="text" id="fPt" class="fi" placeholder="自訂輸入畫師名稱"></div><div class="col-span-2"><label class="fl">來源廠家 *</label><input type="text" id="fMk" class="fi" list="mkDL" placeholder="輸入或選擇"><datalist id="mkDL">${makers.map(m=>`<option value="${m.name}">`).join('')}</datalist></div><div><label class="fl">數量 *</label><input type="number" id="fQty" class="fi" min="1" inputmode="numeric" value="1" placeholder="預設 1"></div>${fxPanelHTML('')}<div><label class="fl">成本 * <span class="text-gold-800 font-normal">（台幣 NT$）</span></label><input type="number" id="fCs" class="fi" min="0" inputmode="numeric" placeholder="可由上方換算帶入"></div><div><label class="fl">額外成本</label><input type="number" id="fEc" class="fi" value="0" min="0" inputmode="numeric" title="稅費、框成本、運費等"></div><div><label class="fl">售價 *</label><input type="number" id="fPr" class="fi" min="0" inputmode="numeric"></div><div><label class="fl">含稅</label><select id="fTx" class="fi"><option value="yes" ${S.defTax?'selected':''}>含稅</option><option value="no" ${!S.defTax?'selected':''}>未含稅</option></select></div><div><label class="fl">含框</label><select id="fFr" class="fi"><option value="no" ${!S.defFrame?'selected':''}>無框</option><option value="yes" ${S.defFrame?'selected':''}>含框</option></select></div><div><label class="fl">進貨日期 *</label><input type="date" id="fPD" class="fi" value="${new Date().toISOString().split('T')[0]}"></div><div><label class="fl">倉庫</label><select id="fWh" class="fi"><option value="">未指定</option>${warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}</select></div><div class="col-span-2 grid grid-cols-3 gap-2"><div><label class="fl">長 (cm)</label><input type="number" id="fLength" class="fi" min="0" step="0.1" placeholder="長"></div><div><label class="fl">寬 (cm)</label><input type="number" id="fWidth" class="fi" min="0" step="0.1" placeholder="寬"></div><div><label class="fl">高 (cm)</label><input type="number" id="fHeight" class="fi" min="0" step="0.1" placeholder="高"></div></div><div><label class="fl">備註</label><input type="text" id="fNt" class="fi"></div></div><div class="flex justify-end gap-2 mt-4 pb-2"><button class="bt bt-o" onclick="clM('M2')">取消</button><button class="bt bt-g" onclick="sIt()"><span class="material-icons-outlined text-xs">save</span>儲存</button></div>`;
     curImg='';curHash=null;
   }
   opM('M2');
@@ -2562,7 +2568,10 @@ async function sIt() {
     fr = document.getElementById('fFr').value === 'yes',
     pd = document.getElementById('fPD').value,
     wh = document.getElementById('fWh')?.value || '',
-    nt = document.getElementById('fNt').value.trim();
+    nt = document.getElementById('fNt').value.trim(),
+    length = parseFloat(document.getElementById('fLength')?.value) || null,
+    width = parseFloat(document.getElementById('fWidth')?.value) || null,
+    height = parseFloat(document.getElementById('fHeight')?.value) || null;
   if (!co) { toast('請輸入編號', 'e'); return; }
   if (!rg) { toast('請選地區', 'e'); return; }
   if (!mk) { toast('請輸入廠家', 'e'); return; }
@@ -2601,6 +2610,9 @@ async function sIt() {
         purchaseDate: pd,
         notes: nt,
         warehouse: wh,
+        length: length,
+        width: width,
+        height: height,
         // 確保出貨相關字段不會被清空
         shipmentDate: items[i].shipmentDate,
         shipNotes: items[i].shipNotes,
@@ -2632,7 +2644,10 @@ async function sIt() {
       cost: cs, extraCost: ec, price: pr, taxIncluded: tx, framed: fr, purchaseDate: pd,
       shipmentDate: null, shipNotes: '', status: 'in-stock', notes: nt,
       custName: '', custPhone: '', agentName: '', deposit: 0, balance: 0, balanceDue: '', created_at: pd,
-      warehouse: wh
+      warehouse: wh,
+      length: length,
+      width: width,
+      height: height
     });
     S.codeNext = (S.codeNext || 1) + 1;
     toast('進貨成功', 's');
